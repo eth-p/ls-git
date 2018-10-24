@@ -73,7 +73,7 @@ done < <(grep "^use [A-Z][A-Za-z\:]\{1,\}" "$HERE/ls-git.pl" | sed 's/use \([A-Z
 # Preproccess:
 
 echo "Preprocessing..."
-tempfile="$(mktemp "$(mktemp -d)"/'ls-git.pl')"
+tempfile="$(mktemp "$(mktemp -d)"/'ls-git.XXXXXX')"
 
 while IFS='' read -r line; do
 	if [ "${line:0:7}" = "require" ]; then
@@ -84,12 +84,14 @@ while IFS='' read -r line; do
 			echo "# <PREPROCESSOR> INCLUDE: $file" >> "$tempfile"
 			cat "$file" >> "$tempfile"
 			echo "# <PREPROCESSOR> END:     $file" >> "$tempfile"
+			continue
 		else
 			echo "------"
 			echo "FATAL: Failed to embed file: $file";
 			exit 1
 		fi
 	fi
+
 	echo "$line" >> "$tempfile"
 done < "$HERE/ls-git.pl"
 
