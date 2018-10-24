@@ -31,7 +31,7 @@ use Cwd 'abs_path';
 use Cwd 'realpath';
 use Date::Format;
 use File::Basename;
-use File::Spec::Functions 'catfile';
+use File::Spec::Functions 'catfile', 'rel2abs';
 use Fcntl ':mode';
 use Getopt::Long;
 use List::Util qw(reduce max);
@@ -205,7 +205,6 @@ sub file_color {
 ## @returns [string] The color string.
 sub status_color {
     my $info = $_[0];
-    say $info->{'git'}->{'status'};
     return ""           if ($info->{'git'}->{'status'} eq 'up-to-date');
     return "\x1B[34m"   if ($info->{'git'}->{'status'} eq 'modified');
     return "\x1B[33m"   if ($info->{'git'}->{'status'} eq 'untracked');
@@ -245,7 +244,7 @@ sub git_status {
     my $line;
 
     # git ls-files
-    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD`;
+    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
     if (!$lsfiles) {
         return 0;
     }
@@ -254,7 +253,7 @@ sub git_status {
         push $results, {
             'file'   => $line,
             'status' => 'up-to-date'
-        }
+        };
     }
 
     # git status
@@ -296,16 +295,8 @@ sub get_versioning_for_files {
     my $dir = '';
     my $file;
     my $files = [sort {$a->{'path'} cmp $b->{'path'}} @{$_[0]}];
-    my %fileshash;
-
-    # Create hash for fast lookup.
-    # Also: set everything to assume tracked and up-to-date.
-    foreach $file (@$files) {
-        $fileshash{$file->{'file'}} = $file;
-        $file->{'git'} = {
-            'status' => 'unknown'
-        };
-    }
+    my %githash;
+    my $gitdir = trim(`git rev-parse --show-toplevel 2>/dev/null`);
 
     # Get file status.
     foreach $file (@$files) {
@@ -317,20 +308,22 @@ sub get_versioning_for_files {
             my $git = git_status($filedir) or next;
             my $status;
             foreach $status (@$git) {
-                my $status_file = catfile($filedir, $status->{'file'});
-                $status_file = substr($status_file, 0, -1) if substr($status_file, -1, 1) eq '/';
-                if (exists $fileshash{$status_file}) {
-                    $fileshash{$status_file}->{'git'} = $status;
-                } else {
-                    # It might be a file in a subdirectory.
-                    ($status_file) = $status_file =~ /^((?:\.\/)?[^\/]+)\//;
-                    if (exists $fileshash{$status_file}) {
-                        $fileshash{$status_file}->{'git'} = {
-                            'status' => 'modified'
-                        };
-                    }
+                my $status_file = rel2abs(catfile($gitdir, catfile($filedir, $status->{'file'})));
+                $githash{$status_file} = $status;
+                # Bubble up to gitdir.
+                while (($status_file = dirname($status_file)) ne $gitdir) {
+                    $githash{$status_file} = {
+                        'status' => 'modified'
+                    };
                 }
             }
+        }
+    }
+
+    # Set git key on file objects.
+    foreach $file (@$files) {
+        if (exists $githash{$file->{'path'}}) {
+            $file->{'git'} = $githash{$file->{'path'}};
         }
     }
 }
@@ -420,7 +413,7 @@ sub file_info {
         'file'           => $file,
         'kind'           => file_mode_to_kind($stat[2]),
         'size'           => $stat[7],
-        'path'           => abs_path($file),
+        'path'           => rel2abs($file),
         'path_canonical' => &realpath($file),
         'path_basename'  => basename($file),
         'user'           => $stat[4],
