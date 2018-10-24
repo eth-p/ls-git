@@ -900,6 +900,7 @@ sub print_listing {
 $color = $color || $args{'G'} || 0;
 
 $args{'a'} = 1 if !$args{'a'} && $args{'f'};
+$args{'l'} = 1; # FIXME: Temporary until multi-column is implemented.
 
 my $printopts = {
     'sort'                    => 'name', # TODO: Configurable
