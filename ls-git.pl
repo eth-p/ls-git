@@ -884,7 +884,7 @@ sub print_listing {
         };
     }
 
-    print_entries($files, { %{$_[1]}, 'show_total' => 1 }) or return 0;
+    print_entries($files, $_[1]) or return 0;
 
     return 1;
 }
@@ -916,6 +916,7 @@ my $printopts = {
     'sort'                    => 'name', # TODO: Configurable
     'color'                   => $color,
     'single_column'           => $args{'1'} || $args{'l'} || 0,
+    'show_total'              => $args{'l'},
 
     # Components
     'component_fields'        => $args{'l'} || 0,
