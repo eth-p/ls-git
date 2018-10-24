@@ -16,9 +16,16 @@ See [here](https://github.com/eth-p/ls-git/issues/1) for a full compatibility li
 
 ## Requirements
 
+In order to use `ls-git`, the following requirements must be met:
+
+Programs:
 - git
 - tput
 - perl
+
+Perl Modules:
+- DateTime
+- Math::Round
 
 ## Installation
 
@@ -27,3 +34,5 @@ git clone 'https://github.com/eth-p/ls-git.git'
 cd ls-git
 ./install
 ```
+
+This will install all required Perl modules, and save `ls-git` to `~/.bin/ls-git`.
