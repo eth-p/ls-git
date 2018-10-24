@@ -245,9 +245,7 @@ sub git_status {
 
     # git ls-tree
     my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
-    if (!$lsfiles) {
-        return 0;
-    }
+    return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
         push $results, {
@@ -258,9 +256,7 @@ sub git_status {
 
     # git ls-files (ignored)
     $lsfiles = `git -C "$_[0]" ls-files --others -i --exclude-standard 2>/dev/null`;
-    if (!$lsfiles) {
-        return 0;
-    }
+    return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
         push $results, {
@@ -271,9 +267,7 @@ sub git_status {
 
     # git status
     my $porcelain = `git -C "$_[0]" status --porcelain=2 2>/dev/null`;
-    if (!$porcelain) {
-        return 0;
-    }
+    return 0 if $? != 0;
 
     # Parse status.
     for $line (split(/\n/, $porcelain)) {
@@ -321,8 +315,9 @@ sub get_versioning_for_files {
             my $git = git_status($filedir) or next;
             my $status;
             foreach $status (@$git) {
-                my $status_file = rel2abs(catfile($gitdir, catfile($filedir, $status->{'file'})));
+                my $status_file = rel2abs($status->{'file'}, $filedir);
                 $githash{$status_file} = $status;
+
                 # Bubble up to gitdir.
                 while (($status_file = dirname($status_file)) ne $gitdir) {
                     $githash{$status_file} = {
