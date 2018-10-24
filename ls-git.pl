@@ -52,13 +52,14 @@ my @argspec     = (
     "a",      # Display all files.
     "A",      # Display all files, except for "."/"..".
     "f",      # Same as -a.
+    "g",      # Do not display user.
     "G",      # Enable colors.
     "H",      # Follow symlink command-line arguments.
     "h",      # Display human readable units.
     "i",      # Print inode.
     "l",      # Output: long format.
     "n",      # Display owner and group using uid/gid.
-    "o",      # Do not display group.
+    "o",      # Do not display owner.
     "P",      # Do not follow symlink command-line arguments. Opposite of H.
     "s",      # Print block count.
     #"@",     # TODO: Extended attribute support.
@@ -433,9 +434,6 @@ sub render_component_fields {
     my $info   = $_[2];
 
     @$render[$colnum] = [{
-        'text'   => ' ',
-        'margin' => 1 # bool, not a value
-    },{
         'text' => $info->{'fields'}
     }];
 }
@@ -448,9 +446,6 @@ sub render_component_blocks {
     my $info   = $_[2];
 
     @$render[$colnum] = [{
-        'text'   => ' ',
-        'margin' => 1 # bool, not a value
-    },{
         'text' => $info->{'io_blocks'}
     }];
 }
@@ -465,7 +460,7 @@ sub render_component_owner {
     my ($names_human) = desarg $_[3], {'componentopt_names_human'  => 1};
 
     @$render[$colnum] = [{
-        'text'     => $names_human ? get_user_name($info->{'user'}) : $info->{'user'},
+        'text' => $names_human ? get_user_name($info->{'user'}) : $info->{'user'},
     }];
 }
 
@@ -479,9 +474,6 @@ sub render_component_group {
     my ($names_human) = desarg $_[3], {'componentopt_names_human'  => 1};
 
     @$render[$colnum] = [{
-        'text'   => ' ',
-        'margin' => 1 # bool, not a value
-    },{
         'text' => $names_human ? get_group_name($info->{'group'}) : $info->{'group'},
     }];
 }
@@ -496,9 +488,6 @@ sub render_component_size {
     my ($size_human) = desarg $_[3], {'componentopt_size_human' => 0};
 
     @$render[$colnum] = [{
-        'text'   => ' ',
-        'margin' => 1 # bool, not a value
-    },{
         'text' => ($size_human ? format_size($info->{'size'}) : $info->{'size'})
     }];
 }
@@ -510,13 +499,25 @@ sub render_component_date {
     my $colnum    = $_[1];
     my $info      = $_[2];
 
-
     my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
     my $date_stamp = $info->{'time_' . $date_kind};
 
     @$render[$colnum] = [{
         'text' => time2str('%b %e %H:%M', $date_stamp)
     }];
+}
+
+## RENDER COMPONENT:
+## An empty space.
+sub render_component_margin {
+    my $render    = $_[0];
+    my $colnum    = $_[1];
+
+    @$render[$colnum] = [{
+        'text'   => ' ',
+        'margin' => 1 # bool, not a value
+    }];
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -634,9 +635,15 @@ sub print_entries {
         render_component_inode       ($render, $column++, $file, $_[1]) if $component_inode;
         render_component_blocks      ($render, $column++, $file, $_[1]) if $component_blocks;
         render_component_permissions ($render, $column++, $file, $_[1]) if $component_permissions;
+        render_component_margin      ($render, $column++, $file, $_[1]) if $component_permissions;
+
         render_component_fields      ($render, $column++, $file, $_[1]) if $component_fields;
         render_component_owner       ($render, $column++, $file, $_[1]) if $component_owner;
+        render_component_margin      ($render, $column++, $file, $_[1]) if $component_owner && $component_group;
+
         render_component_group       ($render, $column++, $file, $_[1]) if $component_group;
+
+        render_component_margin      ($render, $column++, $file, $_[1]) if $component_size;
         render_component_size        ($render, $column++, $file, $_[1]) if $component_size;
         render_component_date        ($render, $column++, $file, $_[1]) if $component_date;
         render_component_file        ($render, $column++, $file, $_[1]) if $component_file;
@@ -661,12 +668,13 @@ sub print_entries {
 
         # Print columns.
         foreach $render (@renders) {
+            my $buffer = '';
             for (my $i = 0; $i < @columns; $i++) {
-                print " " if $i != 0;
-                print component_string($render->{'render'}[$i], $columns[$i], ($i == @columns - 1) ? '-' : 'L');
+                $buffer .= " " if ($i != 0 && !$render->{'render'}[$i][0]->{'margin'});
+                $buffer .= component_string($render->{'render'}[$i], $columns[$i], ($i == @columns - 1) ? '-' : 'L');
             }
 
-            print "\n";
+            say $buffer;
         }
 
     } else {
@@ -725,6 +733,8 @@ sub print_listing {
     $SIG{__WARN__} = undef;
 }
 
+$color = $color || $args{'G'} || 0;
+
 $args{'a'} = 1 if !$args{'a'} && $args{'f'};
 
 my $printopts = {
@@ -735,7 +745,7 @@ my $printopts = {
     # Components
     'component_fields'        => $args{'l'} || 0,
     'component_permissions'   => $args{'l'} || 0,
-    'component_owner'         => $args{'l'} || 0,
+    'component_owner'         => $args{'g'} ?  0 : ($args{'l'} || 0),
     'component_group'         => $args{'o'} ?  0 : ($args{'l'} || 0),
     'component_size'          => $args{'l'} || 0,
     'component_date'          => $args{'l'} || 0,
