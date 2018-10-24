@@ -29,11 +29,13 @@ use feature qw(say);
 use Cwd;
 use Cwd 'abs_path';
 use Cwd 'realpath';
+use Date::Format;
 use File::Basename;
 use File::Spec::Functions 'catfile';
 use Fcntl ':mode';
 use Getopt::Long;
 use List::Util qw(reduce max);
+use Math::Round;
 use Scalar::Util qw(reftype);
 
 use Data::Dumper; # Debug
@@ -107,6 +109,29 @@ sub desarg {
     }
 
     return @results;
+}
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Util: Formatting
+# ----------------------------------------------------------------------------------------------------------------------
+
+## Formats a number using the units of information suffixes.
+## See: https://en.wikipedia.org/wiki/Units_of_information
+##
+## @param   [int]    The number to format.
+## @returns [string] The formatted number.
+sub format_size {
+    my $size = $_[0];
+    my $lim  = 1;
+    return $size                               . 'B' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'K' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'M' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'G' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'T' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'P' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'E' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'Z' if $size < ($lim *= 1024);
+    return nearest(0.1, $size / ($lim / 1024)) . 'Y';
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -195,6 +220,10 @@ sub file_mode_to_kind {
 ##     - 'group'           [int]       The ID of the file group.
 ##     - 'group_perms'     [string]    The permissions of the file group.
 ##     - 'other_perms'     [string]    The permissions of everybody else.
+##     - 'stat_dev'        [int]       ???
+##     - 'stat_ino'        [int]       The inode of the file.
+##     - 'stat_mode'       [int]       ???
+##     - 'fields'          [int]       The number of hard links to this file.
 ##
 sub file_info {
     my ($opt_quiet) = desarg $_[1], {'quiet' => 0};
@@ -233,7 +262,7 @@ sub file_info {
         'stat_dev'       => $stat[0],
         'stat_ino'       => $stat[1],
         'stat_mode'      => $stat[2],
-        'stat_nlink'     => $stat[3],
+        'fields'         => $stat[3],
     }
 }
 
@@ -332,8 +361,9 @@ sub render_component_permissions {
 }
 
 ## RENDER COMPONENT:
-## The block count component.
-sub render_component_size_blocks {
+## The fields (stat: nlink) component.
+## This represents the number of links to or inside a filesystem node.
+sub render_component_fields {
     my $render = $_[0];
     my $colnum = $_[1];
     my $info   = $_[2];
@@ -342,7 +372,7 @@ sub render_component_size_blocks {
         'text'   => ' ',
         'margin' => 1 # bool, not a value
     },{
-        'text' => $info->{'io_blocks'}
+        'text' => $info->{'fields'}
     }];
 }
 
@@ -381,10 +411,10 @@ sub render_component_size {
     my $info   = $_[2];
 
     @$render[$colnum] = [{
-        'text'   => '   ',
+        'text'   => '  ',
         'margin' => 1 # bool, not a value
     },{
-        'text' => $info->{'size'}
+        'text' => ($_[3] ? format_size($info->{'size'}) : $info->{'size'})
     }];
 }
 
@@ -399,7 +429,7 @@ sub render_component_date {
     my $date_stamp = $info->{'time_' . $date_kind};
 
     @$render[$colnum] = [{
-        'text' => $date_stamp
+        'text' => time2str('%b %e %H:%M', $date_stamp)
     }];
 }
 
@@ -478,7 +508,7 @@ sub print_entries {
         $opt_single_column,
         $opt_total,
         $component_permissions,
-        $component_size_blocks,
+        $component_fields,
         $component_owner,
         $component_group,
         $component_size,
@@ -493,7 +523,7 @@ sub print_entries {
         {'single_column'           => 0},
         {'show_total'              => 0},
         {'component_permissions'   => 0},
-        {'component_size_blocks'   => 0},
+        {'component_fields'        => 0},
         {'component_owner'         => 0},
         {'component_group'         => 0},
         {'component_size'          => 0},
@@ -517,19 +547,19 @@ sub print_entries {
             'render' => $render
         };
 
-        render_component_permissions ($render, $column++, $file)                          if $component_permissions;
-        render_component_size_blocks ($render, $column++, $file)                          if $component_size_blocks;
-        render_component_owner       ($render, $column++, $file)                          if $component_owner;
-        render_component_group       ($render, $column++, $file)                          if $component_group;
-        render_component_size        ($render, $column++, $file)                          if $component_size;
-        render_component_date        ($render, $column++, $file, $componentopt_date_kind) if $component_date;
-        render_component_file        ($render, $column++, $file, $componentopt_file_dest) if $component_file;
+        render_component_permissions ($render, $column++, $file)                           if $component_permissions;
+        render_component_fields      ($render, $column++, $file)                           if $component_fields;
+        render_component_owner       ($render, $column++, $file)                           if $component_owner;
+        render_component_group       ($render, $column++, $file)                           if $component_group;
+        render_component_size        ($render, $column++, $file, $componentopt_size_human) if $component_size;
+        render_component_date        ($render, $column++, $file, $componentopt_date_kind)  if $component_date;
+        render_component_file        ($render, $column++, $file, $componentopt_file_dest)  if $component_file;
 
         push @renders, $renhash;
     }
 
     # Print total.
-    say "total " . (reduce {$a + $b} (map {$_->{'io_blocks'}} @entries)) if $opt_total;
+    # say "total " . (reduce {$a + $b} (map {$_->{'io_blocks'}} @entries)) if $opt_total;
 
     # Print files.
     my $render;
@@ -558,6 +588,7 @@ sub print_entries {
         my $width = max (map {reduce {$a + $b} @{component_widths($_->{'render'})}} @renders);
 
         # TODO: Short format.
+        warn 'TODO: Short format.';
     }
 
     return 1;
@@ -667,16 +698,27 @@ for (my $i = 0; $i < @ARGV; $i++) {
 # Main: Print things!
 # ----------------------------------------------------------------------------------------------------------------------
 
-my $printopts = {
-    'component_permissions' => 1,
-    'component_size_blocks' => 1,
-    'component_owner'       => 1,
-    'component_group'       => 1,
-    'component_size'        => 1,
-    'component_date'        => 1,
-    'componentopt_file_dest' => 1,
-    'single_column'         => 1,
-};
+my $printopts;
+{
+    # no warnings 'uninitialized';
+    $printopts = {
+        'sort'                    => 'name', # TODO: Configurable
+        'single_column'           => $args{'1'} || $args{'l'} || 0,
+
+        # Components
+        'component_fields'        => $args{'l'} || 0,
+        'component_permissions'   => $args{'l'} || 0,
+        'component_owner'         => $args{'l'} || 0,
+        'component_group'         => $args{'l'} || 0,
+        'component_size'          => $args{'l'} || 0,
+        'component_date'          => $args{'l'} || 0,
+
+        # Component Options
+        'componentopt_file_dest'  => $args{'l'} || 0,
+        'componentopt_size_human' => $args{'h'} || 0,
+        'componentopt_date_kind', => 'modified',
+    };
+}
 
 # Entries.
 print_entries(\@files, $printopts) or $status = 1;
