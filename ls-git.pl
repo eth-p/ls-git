@@ -277,7 +277,6 @@ sub git_status {
             $status->{'status'} = 'modified';
             $status->{'status'} = 'added'    if $fields[1] eq 'A.';
             $status->{'status'} = 'removed'  if $fields[1] eq 'D.';
-            say $fields[2];
             $status->{'file'}   = $fields[8];
         } elsif ($fields[0] eq '2') {
             my @files = split(/\t/, $fields[9]);
