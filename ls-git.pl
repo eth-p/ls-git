@@ -645,7 +645,7 @@ sub print_entries {
     }
 
     # Print total.
-    # say "total " . (reduce {$a + $b} (map {$_->{'io_blocks'}} @entries)) if $opt_total;
+    say "total " . (reduce {$a + $b} (map {$_->{'io_blocks'}} @entries)) if $opt_total;
 
     # Print files.
     my $render;
