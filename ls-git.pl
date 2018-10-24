@@ -45,6 +45,7 @@ use Data::Dumper; # Debug
 
 my %args        = ();
 my $color       = (-t STDOUT);
+my $term_width  = `tput cols`;
 my $status      = 0;
 
 my @argspec     = (
@@ -653,7 +654,7 @@ sub render_component_git {
 
     # No git information.
     if (!(exists $info->{'git'}->{'status'}) || $info->{'git'}->{'status'} eq 'unknown') {
-        @$render[$colnum] = [{'text' => ''}];
+        @$render[$colnum] = [{'text' => '', 'minwidth_short' => 3}];
         return;
     }
 
@@ -739,8 +740,8 @@ sub component_string {
         $buffer  .= $segment->{'ansi_suffix'} if exists $segment->{'ansi_suffix'};
     }
 
-    $buffer = (sprintf "%-${padding}s", '') . $buffer if $_[2] eq 'L';
-    $buffer = $buffer . (sprintf "%-${padding}s", '') if $_[2] eq 'R';
+    $buffer = (sprintf "%-${padding}s", '') . $buffer if ($padding > 0 && $_[2] eq 'L');
+    $buffer = $buffer . (sprintf "%-${padding}s", '') if ($padding > 0 && $_[2] eq 'R');
 
     return $buffer;
 }
@@ -852,11 +853,32 @@ sub print_entries {
         }
 
     } else {
-        # Calculate column width.
-        my $width = max (map {reduce {$a + $b} @{component_widths($_->{'render'})}} @renders);
+        # Calculate max component width.
+        my $width  = max (map {reduce {$a + $b} @{component_widths($_->{'render'})}} @renders);
+        my $remain = $term_width;
 
-        # TODO: Short format.
-        warn 'TODO: Short format.';
+        foreach $render (@renders) {
+            if (($remain -= ($width + 1)) <= ($width + 1)) {
+                $remain = $term_width - $width + 1;
+                print "\n";
+            }
+
+            my $buffer = '';
+            my $buffer_width = 0;
+            my $count = @{$render->{'render'}};
+            for (my $i = 0; $i < $count; $i++) {
+                my $min_width = $render->{'render'}[$i][0]->{'minwidth_short'} || 0;
+
+                $buffer .= " " if ($i != 0 && !$render->{'render'}[$i][0]->{'margin'});
+                $buffer .= component_string($render->{'render'}[$i], $min_width, ($i == $count - 1) ? '-' : 'L');
+                $buffer_width += component_width(${render}->{'render'}[$i]) + $min_width;
+            }
+
+            my $pad = (' ' x ($width - $buffer_width));
+            print $buffer . $pad . ' ';
+        }
+
+        print "\n";
     }
 
     return 1;
@@ -910,7 +932,6 @@ sub print_listing {
 $color = $color || $args{'G'} || 0;
 
 $args{'a'} = 1 if !$args{'a'} && $args{'f'};
-$args{'l'} = 1; # FIXME: Temporary until multi-column is implemented.
 
 my $printopts = {
     'sort'                    => 'name', # TODO: Configurable
