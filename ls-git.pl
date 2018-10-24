@@ -58,6 +58,7 @@ my @argspec     = (
     "i",      # Print inode.
     "l",      # Output: long format.
     "n",      # Display owner and group using uid/gid.
+    "o",      # Do not display group.
     "P",      # Do not follow symlink command-line arguments. Opposite of H.
     "s",      # Print block count.
     #"@",     # TODO: Extended attribute support.
@@ -178,6 +179,25 @@ sub get_group_name {
     return $cache_get_group_name{$gid} = getgrgid($gid) || $gid;
 }
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Util: Colors
+# ----------------------------------------------------------------------------------------------------------------------
+
+## Determines the file display color from its permissions, flags, and kind.
+##
+## @param   [\hash]  The file info colors.
+## @returns [string] The color string.
+sub file_color {
+    my $info = $_[0];
+    return "\x1B[34m" if ($info->{'kind'}->{'kind'} eq 'directory');
+    return "\x1B[35m" if ($info->{'kind'}->{'kind'} eq 'symlink');
+    return "\x1B[33m" if ($info->{'kind'}->{'kind'} eq 'pipe');
+    return "\x1B[31m" if ($info->{'executable'});
+    # TODO: More colors.
+    return '';
+}
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Util: Filesystem Operations
 # ----------------------------------------------------------------------------------------------------------------------
@@ -280,6 +300,7 @@ sub file_info {
         'inode'          => $stat[1],
         'stat_mode'      => $stat[2],
         'fields'         => $stat[3],
+        'executable'     => $stat[2] & (S_IXUSR() | S_IXGRP() | S_IXOTH())
     }
 }
 
@@ -354,9 +375,16 @@ sub render_component_file {
     my $colnum = $_[1];
     my $info   = $_[2];
 
-    my ($show_link_dest) = desarg $_[3], {'componentopt_file_dest'  => 0};
+    my ($color, $show_link_dest) = desarg $_[3],
+        {'color' => 0},
+        {'componentopt_file_dest' => 0};
 
-    my @rendered = ({'text' => $info->{'path_basename'}});
+    my @rendered = ({
+        'text'        => $info->{'path_basename'},
+        'ansi_prefix' => $color ? file_color($info) : '',
+        'ansi_suffix' => $color ? "\x1B[0m" : ''
+    });
+
     if ($show_link_dest && $info->{'kind'}->{'kind'} eq 'symlink') {
         push \@rendered, {'text' => ' -> '};
         push \@rendered, {'text' => readlink($info->{'file'})};
@@ -701,13 +729,14 @@ $args{'a'} = 1 if !$args{'a'} && $args{'f'};
 
 my $printopts = {
     'sort'                    => 'name', # TODO: Configurable
+    'color'                   => $color,
     'single_column'           => $args{'1'} || $args{'l'} || 0,
 
     # Components
     'component_fields'        => $args{'l'} || 0,
     'component_permissions'   => $args{'l'} || 0,
     'component_owner'         => $args{'l'} || 0,
-    'component_group'         => $args{'l'} || 0,
+    'component_group'         => $args{'o'} ?  0 : ($args{'l'} || 0),
     'component_size'          => $args{'l'} || 0,
     'component_date'          => $args{'l'} || 0,
     'component_inode'         => $args{'i'} || 0,
