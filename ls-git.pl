@@ -779,6 +779,8 @@ sub print_entries {
     my @entries = map {file_info $_->{'path'}, {'quiet' => $opt_quiet}} @{$_[0]};
     my @renders = ();
 
+    return 1 if @entries == 0;
+
     # Git things.
     get_versioning_for_files(\@entries);
 
