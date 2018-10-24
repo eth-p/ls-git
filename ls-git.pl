@@ -73,10 +73,17 @@ my @argspec     = (
 # Localization:
 # ----------------------------------------------------------------------------------------------------------------------
 
-my $locale_datetime         = DateTime::Locale->load($LANG || 'en-US');
-my $locale_datetime_patterns = {
-    'recent'  => 'MMM dd',
-    'distant' => 'MMM dd Y'
+my $locale_datetime      = DateTime::Locale->load($LANG || 'en-US');
+my $locale_date_patterns = {
+    'recent'  => $locale_datetime->date_format_short =~ s/y{1,}//r  =~ s/M{1,}/MMM/r =~ s/[-\/]/ /gr =~ s/\s+$//gr =~ s/^\s+//gr,
+    'distant' => $locale_datetime->date_format_short =~ s/y{1,}/Y/r =~ s/M{1,}/MMM/r =~ s/[-\/]/ /gr =~ s/\s+$//gr =~ s/^\s+//gr,
+    'align'   => 'L'
+};
+
+my $locale_time_patterns = {
+    'recent'  => 'kk:mm',
+    'distant' => 'kk:mm',
+    'align'   => 'L'
 };
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -644,6 +651,26 @@ sub render_component_size {
 }
 
 ## RENDER COMPONENT:
+## The file time.
+sub render_component_time {
+    my $render    = $_[0];
+    my $colnum    = $_[1];
+    my $info      = $_[2];
+
+    my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
+    my $timestamp   = $info->{'time_' . $date_kind};
+
+    my $datetime         = DateTime->from_epoch(epoch => $timestamp);
+    my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
+    my $pattern          = $locale_time_patterns->{$pattern_style};
+
+    @$render[$colnum] = [{
+        'text'  => $datetime->format_cldr($pattern),
+        'align' => $locale_time_patterns->{'align'} || 'L'
+    }];
+}
+
+## RENDER COMPONENT:
 ## The file date.
 sub render_component_date {
     my $render    = $_[0];
@@ -654,11 +681,12 @@ sub render_component_date {
     my $timestamp   = $info->{'time_' . $date_kind};
 
     my $datetime         = DateTime->from_epoch(epoch => $timestamp);
-    my $datetime_pattern = $locale_datetime_patterns->{$datetime->year() == $year ? 'recent' : 'distant'};
+    my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
+    my $pattern          = $locale_date_patterns->{$pattern_style};
 
     @$render[$colnum] = [{
-        'text'  => $datetime->format_cldr($datetime_pattern),
-        'align' => 'L'
+        'text'  => $datetime->format_cldr($pattern),
+        'align' => $locale_date_patterns->{'align'} || 'L'
     }];
 }
 
@@ -787,6 +815,7 @@ sub print_entries {
         $component_group,
         $component_size,
         $component_date,
+        $component_time,
         $component_file,
         $component_inode,
         $component_blocks,
@@ -801,6 +830,7 @@ sub print_entries {
         {'component_group'         => 0},
         {'component_size'          => 0},
         {'component_date'          => 0},
+        {'component_time'          => 0},
         {'component_file'          => 1},
         {'component_inode'         => 1},
         {'component_blocks'        => 1};
@@ -838,6 +868,7 @@ sub print_entries {
         render_component_margin      ($render, $column++, $file, $_[1], 2) if $component_size;
         render_component_size        ($render, $column++, $file, $_[1])    if $component_size;
         render_component_date        ($render, $column++, $file, $_[1])    if $component_date;
+        render_component_time        ($render, $column++, $file, $_[1])    if $component_time;
 
         render_component_git         ($render, $column++, $file, $_[1])    if $component_file;
         render_component_file        ($render, $column++, $file, $_[1])    if $component_file;
@@ -965,6 +996,7 @@ my $printopts = {
     'component_group'         => $args{'o'} ?  0 : ($args{'l'} || 0),
     'component_size'          => $args{'l'} || 0,
     'component_date'          => $args{'l'} || 0,
+    'component_time'          => $args{'l'} || 0,
     'component_inode'         => $args{'i'} || 0,
     'component_blocks'        => $args{'s'} || 0,
 
