@@ -205,6 +205,7 @@ sub file_color {
 ## @returns [string] The color string.
 sub status_color {
     my $info = $_[0];
+    say $info->{'git'}->{'status'};
     return ""           if ($info->{'git'}->{'status'} eq 'up-to-date');
     return "\x1B[34m"   if ($info->{'git'}->{'status'} eq 'modified');
     return "\x1B[33m"   if ($info->{'git'}->{'status'} eq 'untracked');
@@ -244,7 +245,7 @@ sub git_status {
     my $line;
 
     # git ls-files
-    my $lsfiles = `git -C "$_[0]" ls-files`;
+    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD`;
     if (!$lsfiles) {
         return 0;
     }
@@ -320,6 +321,14 @@ sub get_versioning_for_files {
                 $status_file = substr($status_file, 0, -1) if substr($status_file, -1, 1) eq '/';
                 if (exists $fileshash{$status_file}) {
                     $fileshash{$status_file}->{'git'} = $status;
+                } else {
+                    # It might be a file in a subdirectory.
+                    ($status_file) = $status_file =~ /^((?:\.\/)?[^\/]+)\//;
+                    if (exists $fileshash{$status_file}) {
+                        $fileshash{$status_file}->{'git'} = {
+                            'status' => 'modified'
+                        };
+                    }
                 }
             }
         }
