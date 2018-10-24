@@ -33,7 +33,7 @@ use Env qw($LANG);
 use DateTime;
 use DateTime::Locale;
 use File::Basename;
-use File::Spec::Functions 'catfile', 'rel2abs';
+use File::Spec::Functions 'catfile', 'rel2abs', 'abs2rel';
 use Fcntl ':mode';
 use Getopt::Long;
 use List::Util qw(reduce max);
@@ -124,6 +124,31 @@ sub prog_usage {
 ## @returns [string] The trimmed string.
 sub trim {
     return ($_[0] =~ /^\s*(.*)\s*$/)[0];
+}
+
+## Expands a path without canonicalizing it.
+##
+## @param   [string] The path to expand.
+## @returns [string] The resulting path.
+sub path_expand {
+    my @components = split(/\//, $_[0]);
+
+    expand:
+    for (my $i = 0; $i < @components; $i++) {
+        if ($components[$i] eq '.') {
+            $components[$i] = undef;
+        } elsif ($components[$i] eq '..') {
+            for (my $j = $i - 1; $j >= 0; $j--) {
+                if (defined $components[$j]) {
+                    $components[$j] = undef;
+                    $components[$i] = undef;
+                    next expand;
+                }
+            }
+        }
+    }
+
+    return join('/', grep {defined $_} @components);
 }
 
 ## Destructures an arguments hash.
@@ -333,7 +358,6 @@ sub get_versioning_for_files {
     my $file;
     my $files = [sort {$a->{'path'} cmp $b->{'path'}} @{$_[0]}];
     my %githash;
-    my $gitdir = trim(`git rev-parse --show-toplevel 2>/dev/null`);
 
     # Get file status.
     foreach $file (@$files) {
@@ -342,10 +366,11 @@ sub get_versioning_for_files {
         my $filedir = dirname($file->{'file'});
         if ($filedir ne $dir) {
             $dir = $filedir;
+            my $gitdir = trim(`git -C "$filedir" rev-parse --show-toplevel` || '');
             my $git = git_status($filedir) or next;
             my $status_info;
             foreach $status_info (@$git) {
-                my $status_file   = rel2abs($status_info->{'file'}, $filedir);
+                my $status_file   = path_expand(rel2abs(catfile($filedir, $status_info->{'file'})));
                 my $file_status = $status_info->{'status'};
                 $githash{$status_file} = $status_info;
 
@@ -468,7 +493,7 @@ sub file_info {
         'file'           => $file,
         'kind'           => file_mode_to_kind($stat[2]),
         'size'           => $stat[7],
-        'path'           => rel2abs($file),
+        'path'           => path_expand(rel2abs($file)),
         'path_canonical' => &realpath($file),
         'path_basename'  => basename($file),
         'user'           => $stat[4],
@@ -950,7 +975,7 @@ sub print_entries {
                 $buffer_width += component_width(${render}->{'render'}[$i]) + $min_width;
             }
 
-            my $pad = (' ' x ($width - $buffer_width));
+            my $pad = ' ' x max(1, $width - $buffer_width);
             print $buffer . $pad . ' ';
         }
 
