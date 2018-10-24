@@ -221,7 +221,6 @@ sub status_color {
 ## @returns [string] The color string.
 sub status_symbol {
     my $info = $_[0];
-    say $info->{'git'}->{'status'};
     return "#" if ($info->{'git'}->{'status'} eq 'up-to-date');
     return '~' if ($info->{'git'}->{'status'} eq 'modified');
     return '?' if ($info->{'git'}->{'status'} eq 'untracked');
