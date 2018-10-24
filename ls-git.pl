@@ -345,14 +345,31 @@ sub get_versioning_for_files {
             my $git = git_status($filedir) or next;
             my $status_info;
             foreach $status_info (@$git) {
-                my $status_file = rel2abs($status_info->{'file'}, $filedir);
+                my $status_file   = rel2abs($status_info->{'file'}, $filedir);
+                my $file_status = $status_info->{'status'};
                 $githash{$status_file} = $status_info;
 
                 # Bubble up to gitdir.
                 while (($status_file = dirname($status_file)) ne $gitdir) {
-                    $githash{$status_file} = {
-                        'status' => $status_info->{'status'} eq 'ignored' ? 'ignored' : 'modified'
-                    };
+                    my $dir_status = $githash{$status_file} || 'unknown';
+
+                    if ($file_status eq 'ignored' && $dir_status =~ /unknown/) {
+                        $githash{$status_file} = {
+                            'status' => 'ignored'
+                        };
+                    } elsif ($file_status eq 'up-to-date' && $dir_status =~ /unknown|ignored/) {
+                        $githash{$status_file} = {
+                            'status' => 'up-to-date'
+                        };
+                    } elsif ($file_status eq 'untracked' && $dir_status =~ /unknown|ignored|up-to-date/) {
+                        $githash{$status_file} = {
+                            'status' => 'untracked'
+                        };
+                    } elsif (($file_status =~ /modified|added|removed|renamed/) ) {
+                        $githash{$status_file} = {
+                            'status' => 'modified'
+                        };
+                    }
                 }
             }
         }
