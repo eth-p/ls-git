@@ -44,8 +44,23 @@ use Data::Dumper; # Debug
 # ----------------------------------------------------------------------------------------------------------------------
 
 my %args        = ();
-my $color       = 1;
+my $color       = (-t STDOUT);
 my $status      = 0;
+
+my @argspec     = (
+    "1",      # Output: One file per line.
+    "a",      # Display all files.
+    "A",      # Display all files, except for "."/"..".
+    "l",      # Output: long format.
+    "n",      # Display owner and group using uid/gid.
+    "G",      # Enable colors.
+    "H",      # Follow symlink command-line arguments.
+    "h",      # Display human readable units.
+    "i",      # Print inode.
+    "P",      # Do not follow symlink command-line arguments. Opposite of H.
+    "s",      # Print block count.
+    #"@",     # TODO: Extended attribute support.
+);
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Messages:
@@ -62,7 +77,8 @@ sub prog_error {
 ## Returns a string describing how to use the command.
 ## @returns [string]
 sub prog_usage {
-    return "usage: @{[basename($0, '.pl')]} [-ahls] [file ...]";
+    my $argspec_str = reduce {$a . $b} @argspec;
+    return "usage: @{[basename($0, '.pl')]} [-$argspec_str] [file ...]";
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -221,7 +237,7 @@ sub file_mode_to_kind {
 ##     - 'group_perms'     [string]    The permissions of the file group.
 ##     - 'other_perms'     [string]    The permissions of everybody else.
 ##     - 'stat_dev'        [int]       ???
-##     - 'stat_ino'        [int]       The inode of the file.
+##     - 'inode'           [int]       The inode of the file.
 ##     - 'stat_mode'       [int]       ???
 ##     - 'fields'          [int]       The number of hard links to this file.
 ##
@@ -260,7 +276,7 @@ sub file_info {
         'io_blocksize'   => $stat[11],
         'io_blocks'      => $stat[12],
         'stat_dev'       => $stat[0],
-        'stat_ino'       => $stat[1],
+        'inode'          => $stat[1],
         'stat_mode'      => $stat[2],
         'fields'         => $stat[3],
     }
@@ -291,7 +307,7 @@ sub files {
     # Read the directory.
     unless (opendir($directory_handle, $directory)) {
         say STDERR prog_error("$directory: $!") unless $opt_quiet;
-        return -1;
+        return 0;
     }
 
     @entries_raw = readdir($directory_handle);
@@ -300,7 +316,11 @@ sub files {
     # Clean the entries.
     my $entry;
     foreach $entry (@entries_raw) {
-        next if (substr($entry, 0, 1) eq '.') && !$opt_hidden;
+        if (substr($entry, 0, 1) eq '.') {
+            next unless $opt_hidden;
+            next if ($entry =~ /^\.{1,2}$/ && $opt_hidden != 2);
+        }
+
         push \@entries, catfile($directory, $entry);
     }
 
@@ -333,8 +353,10 @@ sub render_component_file {
     my $colnum = $_[1];
     my $info   = $_[2];
 
+    my ($show_link_dest) = desarg $_[3], {'componentopt_file_dest'  => 0},;
+
     my @rendered = ({'text' => $info->{'path_basename'}});
-    if ($_[3] && $info->{'kind'}->{'kind'} eq 'symlink') {
+    if ($show_link_dest && $info->{'kind'}->{'kind'} eq 'symlink') {
         push \@rendered, {'text' => ' -> '};
         push \@rendered, {'text' => readlink($info->{'file'})};
     }
@@ -363,6 +385,19 @@ sub render_component_permissions {
 ## RENDER COMPONENT:
 ## The fields (stat: nlink) component.
 ## This represents the number of links to or inside a filesystem node.
+sub render_component_inode {
+    my $render = $_[0];
+    my $colnum = $_[1];
+    my $info   = $_[2];
+
+    @$render[$colnum] = [{
+        'text' => $info->{'inode'}
+    }];
+}
+
+## RENDER COMPONENT:
+## The fields (stat: nlink) component.
+## This represents the number of links to or inside a filesystem node.
 sub render_component_fields {
     my $render = $_[0];
     my $colnum = $_[1];
@@ -373,6 +408,21 @@ sub render_component_fields {
         'margin' => 1 # bool, not a value
     },{
         'text' => $info->{'fields'}
+    }];
+}
+
+## RENDER COMPONENT:
+## The block count component.
+sub render_component_blocks {
+    my $render = $_[0];
+    my $colnum = $_[1];
+    my $info   = $_[2];
+
+    @$render[$colnum] = [{
+        'text'   => ' ',
+        'margin' => 1 # bool, not a value
+    },{
+        'text' => $info->{'io_blocks'}
     }];
 }
 
@@ -410,11 +460,13 @@ sub render_component_size {
     my $colnum = $_[1];
     my $info   = $_[2];
 
+    my ($size_human) = desarg $_[3], {'componentopt_size_human' => 0};
+
     @$render[$colnum] = [{
         'text'   => '  ',
         'margin' => 1 # bool, not a value
     },{
-        'text' => ($_[3] ? format_size($info->{'size'}) : $info->{'size'})
+        'text' => ($size_human ? format_size($info->{'size'}) : $info->{'size'})
     }];
 }
 
@@ -425,7 +477,8 @@ sub render_component_date {
     my $colnum    = $_[1];
     my $info      = $_[2];
 
-    my $date_kind  = $_[3];
+
+    my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
     my $date_stamp = $info->{'time_' . $date_kind};
 
     @$render[$colnum] = [{
@@ -512,11 +565,10 @@ sub print_entries {
         $component_owner,
         $component_group,
         $component_size,
-        $componentopt_size_human,
         $component_date,
-        $componentopt_date_kind,
         $component_file,
-        $componentopt_file_dest
+        $component_inode,
+        $component_blocks,
     ) = desarg $_[1],
         {'quiet'                   => 0},
         {'sort'                    => 'filename'},
@@ -527,11 +579,10 @@ sub print_entries {
         {'component_owner'         => 0},
         {'component_group'         => 0},
         {'component_size'          => 0},
-        {'componentopt_size_human' => 0},
         {'component_date'          => 0},
-        {'componentopt_date_kind', => 'modified'},
         {'component_file'          => 1},
-        {'componentopt_file_dest'  => 0};
+        {'component_inode'         => 1},
+        {'component_blocks'        => 1};
 
 
     my @entries = map {file_info $_->{'path'}, {'quiet' => $opt_quiet}} @{$_[0]};
@@ -547,13 +598,15 @@ sub print_entries {
             'render' => $render
         };
 
-        render_component_permissions ($render, $column++, $file)                           if $component_permissions;
-        render_component_fields      ($render, $column++, $file)                           if $component_fields;
-        render_component_owner       ($render, $column++, $file)                           if $component_owner;
-        render_component_group       ($render, $column++, $file)                           if $component_group;
-        render_component_size        ($render, $column++, $file, $componentopt_size_human) if $component_size;
-        render_component_date        ($render, $column++, $file, $componentopt_date_kind)  if $component_date;
-        render_component_file        ($render, $column++, $file, $componentopt_file_dest)  if $component_file;
+        render_component_inode       ($render, $column++, $file, $_[1]) if $component_inode;
+        render_component_blocks      ($render, $column++, $file, $_[1]) if $component_blocks;
+        render_component_permissions ($render, $column++, $file, $_[1]) if $component_permissions;
+        render_component_fields      ($render, $column++, $file, $_[1]) if $component_fields;
+        render_component_owner       ($render, $column++, $file, $_[1]) if $component_owner;
+        render_component_group       ($render, $column++, $file, $_[1]) if $component_group;
+        render_component_size        ($render, $column++, $file, $_[1]) if $component_size;
+        render_component_date        ($render, $column++, $file, $_[1]) if $component_date;
+        render_component_file        ($render, $column++, $file, $_[1]) if $component_file;
 
         push @renders, $renhash;
     }
@@ -603,10 +656,11 @@ sub print_header {
 
 ## Prints a directory listing.
 ## @param [string] The directory path.
-## @param
+## @param [\hash]  The print options.
+## @param [\hash]  The listing options.
 sub print_listing {
     my $directory = $_[0];
-    my $files     = files($_[0], {'hidden' => $args{'a'}}) or return -1;
+    my $files     = files($_[0], $_[2]) or return 0;
 
     for (my $i = 0; $i < @$files; $i++) {
         @$files[$i] = {
@@ -615,7 +669,7 @@ sub print_listing {
         };
     }
 
-    print_entries($files, { %{$_[1]}, 'show_total' => 1 }) or return -1;
+    print_entries($files, { %{$_[1]}, 'show_total' => 1 }) or return 0;
 
     return 1;
 }
@@ -633,16 +687,40 @@ sub print_listing {
     };
 
     Getopt::Long::Configure('bundling', 'bundling_override', 'gnu_compat');
-    Getopt::Long::GetOptions(\%args,
-        "1",      # One output per line.
-        "a",      # Display all files.
-        "l",      # Display long listing.
-        "G",      # Enable colors.
-        "h",      # Display human readable units.
-    );
+    Getopt::Long::GetOptions(\%args, @argspec);
 
     $SIG{__WARN__} = undef;
 }
+
+my $printopts = {
+    'sort'                    => 'name', # TODO: Configurable
+    'single_column'           => $args{'1'} || $args{'l'} || 0,
+
+    # Components
+    'component_fields'        => $args{'l'} || 0,
+    'component_permissions'   => $args{'l'} || 0,
+    'component_owner'         => $args{'l'} || 0,
+    'component_group'         => $args{'l'} || 0,
+    'component_size'          => $args{'l'} || 0,
+    'component_date'          => $args{'l'} || 0,
+    'component_inode'         => $args{'i'} || 0,
+    'component_blocks'        => $args{'s'} || 0,
+
+    # Component Options
+    'componentopt_file_dest'   => $args{'l'} || 0,
+    'componentopt_size_human'  => $args{'h'} || 0,
+    'componentopt_perms_human' => $args{'n'} ? 0 : 1,
+    'componentopt_date_kind',  => 'modified',
+};
+
+my $listingopts = {
+    'hidden'   => $args{'a'} ? 2 : ($args{'A'} || 0),
+    'symlinks' => $args{'P'} ? 'follow' : 'nofollow'
+};
+
+my $cliopts = {
+    'symlinks' => ($args{'H'} ? 'follow' : 0) || ($args{'P'} ? 'nofollow' : 'default')
+};
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Main: Determine which filesystem nodes to display.
@@ -667,12 +745,24 @@ for (my $i = 0; $i < @ARGV; $i++) {
         next;
     }
 
-    # Determine if symlink should be followed.
-    my $follow = S_ISLNK($stat[2]) || (substr($file, -1, 1) eq '/') || basename($file) =~ /^\.{1,2}$/;
-    if ($follow && !(S_ISDIR($stat[2]) || S_ISLNK($stat[2]))) {
-        say STDERR prog_error("$file: Not a directory");
-        $status = 1;
-        next;
+    # Determine if a symlink argument should be followed.
+    my $follow = S_ISDIR($stat[2]);
+
+    if (substr($file, -1, 1) eq '/') {
+        # If it ends with a '/', the user wants to follow it.
+        # Throw an error if it's not a link or directory, though!
+        if (!(S_ISDIR($stat[2]) || S_ISLNK($stat[2]))) {
+            say STDERR prog_error("$file: Not a directory");
+            $status = 1;
+            next;
+        }
+
+        $follow = 1;
+    }
+
+    if (!$follow && S_ISLNK($stat[2])) {
+        # If it's a symlink, we need to consider command line flags.
+        $follow = ($cliopts->{'symlinks'} eq 'follow') || 0;
     }
 
     if ($follow ? (( -d $file ) ? 1 : 0) : 0) {
@@ -690,35 +780,14 @@ for (my $i = 0; $i < @ARGV; $i++) {
     }
 }
 
-# Sort.
-@files = sort {$a->{'path'} cmp $b->{'path'}} @files;
-@dirs  = sort {$a->{'path'} cmp $b->{'path'}} @dirs;
+#
+# # Sort.
+# @files = sort {$a->{'path'} cmp $b->{'path'}} @files;
+# @dirs  = sort {$a->{'path'} cmp $b->{'path'}} @dirs;
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Main: Print things!
 # ----------------------------------------------------------------------------------------------------------------------
-
-my $printopts;
-{
-    # no warnings 'uninitialized';
-    $printopts = {
-        'sort'                    => 'name', # TODO: Configurable
-        'single_column'           => $args{'1'} || $args{'l'} || 0,
-
-        # Components
-        'component_fields'        => $args{'l'} || 0,
-        'component_permissions'   => $args{'l'} || 0,
-        'component_owner'         => $args{'l'} || 0,
-        'component_group'         => $args{'l'} || 0,
-        'component_size'          => $args{'l'} || 0,
-        'component_date'          => $args{'l'} || 0,
-
-        # Component Options
-        'componentopt_file_dest'  => $args{'l'} || 0,
-        'componentopt_size_human' => $args{'h'} || 0,
-        'componentopt_date_kind', => 'modified',
-    };
-}
 
 # Entries.
 print_entries(\@files, $printopts) or $status = 1;
@@ -727,7 +796,7 @@ print_entries(\@files, $printopts) or $status = 1;
 my $node;
 foreach $node (@dirs) {
     print_header($node->{'path'}) unless $no_header;
-    print_listing($node->{'path'}, $printopts) or $status = 1;
+    print_listing($node->{'path'}, $printopts, $listingopts) or $status = 1;
 }
 
 # Done!
