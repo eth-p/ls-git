@@ -51,12 +51,13 @@ my @argspec     = (
     "1",      # Output: One file per line.
     "a",      # Display all files.
     "A",      # Display all files, except for "."/"..".
-    "l",      # Output: long format.
-    "n",      # Display owner and group using uid/gid.
+    "f",      # Same as -a.
     "G",      # Enable colors.
     "H",      # Follow symlink command-line arguments.
     "h",      # Display human readable units.
     "i",      # Print inode.
+    "l",      # Output: long format.
+    "n",      # Display owner and group using uid/gid.
     "P",      # Do not follow symlink command-line arguments. Opposite of H.
     "s",      # Print block count.
     #"@",     # TODO: Extended attribute support.
@@ -463,7 +464,7 @@ sub render_component_size {
     my ($size_human) = desarg $_[3], {'componentopt_size_human' => 0};
 
     @$render[$colnum] = [{
-        'text'   => '  ',
+        'text'   => ' ',
         'margin' => 1 # bool, not a value
     },{
         'text' => ($size_human ? format_size($info->{'size'}) : $info->{'size'})
@@ -691,6 +692,8 @@ sub print_listing {
 
     $SIG{__WARN__} = undef;
 }
+
+$args{'a'} = 1 if !$args{'a'} && $args{'f'};
 
 my $printopts = {
     'sort'                    => 'name', # TODO: Configurable
