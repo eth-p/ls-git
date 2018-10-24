@@ -143,14 +143,14 @@ sub format_size {
     my $size = $_[0];
     my $lim  = 1;
     return $size                               . 'B' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'K' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'M' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'G' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'T' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'P' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'E' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'Z' if $size < ($lim *= 1024);
-    return nearest(0.1, $size / ($lim / 1024)) . 'Y';
+    return nearest(1, $size / ($lim / 1024)) . 'K' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'M' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'G' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'T' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'P' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'E' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'Z' if $size < ($lim *= 1024);
+    return nearest(1, $size / ($lim / 1024)) . 'Y';
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -514,7 +514,7 @@ sub render_component_margin {
     my $colnum    = $_[1];
 
     @$render[$colnum] = [{
-        'text'   => ' ',
+        'text'   => ' ' x ($_[4] || 1),
         'margin' => 1 # bool, not a value
     }];
 
@@ -632,21 +632,21 @@ sub print_entries {
             'render' => $render
         };
 
-        render_component_inode       ($render, $column++, $file, $_[1]) if $component_inode;
-        render_component_blocks      ($render, $column++, $file, $_[1]) if $component_blocks;
-        render_component_permissions ($render, $column++, $file, $_[1]) if $component_permissions;
-        render_component_margin      ($render, $column++, $file, $_[1]) if $component_permissions;
+        render_component_inode       ($render, $column++, $file, $_[1])    if $component_inode;
+        render_component_blocks      ($render, $column++, $file, $_[1])    if $component_blocks;
+        render_component_permissions ($render, $column++, $file, $_[1])    if $component_permissions;
+        render_component_margin      ($render, $column++, $file, $_[1])    if $component_permissions;
 
-        render_component_fields      ($render, $column++, $file, $_[1]) if $component_fields;
-        render_component_owner       ($render, $column++, $file, $_[1]) if $component_owner;
-        render_component_margin      ($render, $column++, $file, $_[1]) if $component_owner && $component_group;
+        render_component_fields      ($render, $column++, $file, $_[1])    if $component_fields;
+        render_component_owner       ($render, $column++, $file, $_[1])    if $component_owner;
+        render_component_margin      ($render, $column++, $file, $_[1])    if $component_owner && $component_group;
 
-        render_component_group       ($render, $column++, $file, $_[1]) if $component_group;
+        render_component_group       ($render, $column++, $file, $_[1])    if $component_group;
 
-        render_component_margin      ($render, $column++, $file, $_[1]) if $component_size;
-        render_component_size        ($render, $column++, $file, $_[1]) if $component_size;
-        render_component_date        ($render, $column++, $file, $_[1]) if $component_date;
-        render_component_file        ($render, $column++, $file, $_[1]) if $component_file;
+        render_component_margin      ($render, $column++, $file, $_[1], 2) if $component_size;
+        render_component_size        ($render, $column++, $file, $_[1])    if $component_size;
+        render_component_date        ($render, $column++, $file, $_[1])    if $component_date;
+        render_component_file        ($render, $column++, $file, $_[1])    if $component_file;
 
         push @renders, $renhash;
     }
