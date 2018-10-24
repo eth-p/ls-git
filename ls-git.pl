@@ -185,9 +185,9 @@ sub get_group_name {
 # Util: Colors
 # ----------------------------------------------------------------------------------------------------------------------
 
-## Determines the file display color from its permissions, flags, and kind.
+## Determines the display color for a file from its permissions, flags, and kind.
 ##
-## @param   [\hash]  The file info colors.
+## @param   [\hash]  The file info.
 ## @returns [string] The color string.
 sub file_color {
     my $info = $_[0];
@@ -197,6 +197,135 @@ sub file_color {
     return "\x1B[31m" if ($info->{'executable'});
     # TODO: More colors.
     return '';
+}
+
+## Determines the git status color for a file.
+##
+## @param   [\hash]  The file info.
+## @returns [string] The color string.
+sub status_color {
+    my $info = $_[0];
+    return ""           if ($info->{'git'}->{'status'} eq 'up-to-date');
+    return "\x1B[34m"   if ($info->{'git'}->{'status'} eq 'modified');
+    return "\x1B[33m"   if ($info->{'git'}->{'status'} eq 'untracked');
+    return "\x1B[32m"   if ($info->{'git'}->{'status'} eq 'added');
+    return "\x1B[31m"   if ($info->{'git'}->{'status'} eq 'removed');
+    return "\x1B[34m"   if ($info->{'git'}->{'status'} eq 'renamed');
+    return "\x1B[1;39m" if ($info->{'git'}->{'status'} eq 'ignored');
+    return '';
+}
+
+## Determines the git status symbol for a file.
+##
+## @param   [\hash]  The file info.
+## @returns [string] The color string.
+sub status_symbol {
+    my $info = $_[0];
+    say $info->{'git'}->{'status'};
+    return "#" if ($info->{'git'}->{'status'} eq 'up-to-date');
+    return '~' if ($info->{'git'}->{'status'} eq 'modified');
+    return '?' if ($info->{'git'}->{'status'} eq 'untracked');
+    return '+' if ($info->{'git'}->{'status'} eq 'added');
+    return '-' if ($info->{'git'}->{'status'} eq 'removed');
+    return '~' if ($info->{'git'}->{'status'} eq 'renamed');
+    return "!" if ($info->{'git'}->{'status'} eq 'ignored');
+    return ' ';
+}
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Util: Git Operations
+# ----------------------------------------------------------------------------------------------------------------------
+
+## Uses git status --porcelain to retrieve information about the current state of files in a directory.
+##
+## @param  [string] The directory.
+## @return [\array] The status of files in the directory. Everything not mentioned is up-to-date.
+sub git_status {
+    my $results = [];
+    my $line;
+
+    # git ls-files
+    my $lsfiles = `git -C "$_[0]" ls-files`;
+    if (!$lsfiles) {
+        return 0;
+    }
+
+    for $line (split(/\n/, $lsfiles)) {
+        push $results, {
+            'file'   => $line,
+            'status' => 'up-to-date'
+        }
+    }
+
+    # git status
+    my $porcelain = `git -C "$_[0]" status --porcelain=2 2>/dev/null`;
+    if (!$porcelain) {
+        return 0;
+    }
+
+    # Parse status.
+    for $line (split(/\n/, $porcelain)) {
+        my @fields = split(/ /, $line, 9);
+        my $status = {};
+
+        if ($fields[0] eq '?') {
+            $status->{'status'} = 'untracked';
+            $status->{'file'}   = substr($line, 2);
+        } elsif ($fields[0] eq '!') {
+            $status->{'status'} = 'ignored';
+            $status->{'file'}   = substr($line, 2);
+        } elsif ($fields[0] eq '1') {
+            $status->{'status'} = 'modified';
+            $status->{'status'} = 'added'    if $fields[1] eq 'A.';
+            $status->{'status'} = 'removed'  if $fields[1] eq 'D.';
+            say $fields[2];
+            $status->{'file'}   = $fields[8];
+        } elsif ($fields[0] eq '2') {
+            my @files = split(/\t/, $fields[9]);
+            $status->{'status'} = 'renamed';
+            $status->{'file'}   = $files[0];
+            $status->{'to'}     = $files[1];
+        }
+
+        push $results, $status;
+    }
+
+    return $results;
+}
+
+sub get_versioning_for_files {
+    my $dir = '';
+    my $file;
+    my $files = [sort {$a->{'path'} cmp $b->{'path'}} @{$_[0]}];
+    my %fileshash;
+
+    # Create hash for fast lookup.
+    # Also: set everything to assume tracked and up-to-date.
+    foreach $file (@$files) {
+        $fileshash{$file->{'file'}} = $file;
+        $file->{'git'} = {
+            'status' => 'unknown'
+        };
+    }
+
+    # Get file status.
+    foreach $file (@$files) {
+        next if $file->{'kind'}->{'kind'} eq 'directory';
+
+        my $filedir = dirname($file->{'file'});
+        if ($filedir ne $dir) {
+            $dir = $filedir;
+            my $git = git_status($filedir) or next;
+            my $status;
+            foreach $status (@$git) {
+                my $status_file = catfile($filedir, $status->{'file'});
+                $status_file = substr($status_file, 0, -1) if substr($status_file, -1, 1) eq '/';
+                if (exists $fileshash{$status_file}) {
+                    $fileshash{$status_file}->{'git'} = $status;
+                }
+            }
+        }
+    }
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -508,6 +637,36 @@ sub render_component_date {
 }
 
 ## RENDER COMPONENT:
+## A git component.
+sub render_component_git {
+    my $render    = $_[0];
+    my $colnum    = $_[1];
+    my $info      = $_[2];
+
+    # No git information.
+    if (!(exists $info->{'git'}->{'status'}) || $info->{'git'}->{'status'} eq 'unknown') {
+        @$render[$colnum] = [{'text' => ''}];
+        return;
+    }
+
+    # Some git information.
+    my ($color)   = desarg $_[3], {'color' => 0};
+    @$render[$colnum] = [{
+        'ansi_prefix' => $color ? "\x1B[1m" : '',
+        'text' => '[',
+        'ansi_suffix' => $color ? "\x1B[0m" : ''
+    },{
+        'text'        => status_symbol($info),
+        'ansi_prefix' => $color ? status_color($info) : '',
+        'ansi_suffix' => $color ? "\x1B[0m" : ''
+    },{
+        'ansi_prefix' => $color ? "\x1B[1m" : '',
+        'text' => ']',
+        'ansi_suffix' => $color ? "\x1B[0m" : ''
+    }];
+}
+
+## RENDER COMPONENT:
 ## An empty space.
 sub render_component_margin {
     my $render    = $_[0];
@@ -622,6 +781,9 @@ sub print_entries {
     my @entries = map {file_info $_->{'path'}, {'quiet' => $opt_quiet}} @{$_[0]};
     my @renders = ();
 
+    # Git things.
+    get_versioning_for_files(\@entries);
+
     # Render components.
     my $file;
     foreach $file (@entries) {
@@ -646,6 +808,8 @@ sub print_entries {
         render_component_margin      ($render, $column++, $file, $_[1], 2) if $component_size;
         render_component_size        ($render, $column++, $file, $_[1])    if $component_size;
         render_component_date        ($render, $column++, $file, $_[1])    if $component_date;
+
+        render_component_git         ($render, $column++, $file, $_[1])    if $component_file;
         render_component_file        ($render, $column++, $file, $_[1])    if $component_file;
 
         push @renders, $renhash;
@@ -836,7 +1000,9 @@ for (my $i = 0; $i < @ARGV; $i++) {
 # ----------------------------------------------------------------------------------------------------------------------
 
 # Entries.
-print_entries(\@files, $printopts) or $status = 1;
+if (@files > 0) {
+    print_entries(\@files, $printopts) or $status = 1;
+}
 
 # Directories.
 my $node;
