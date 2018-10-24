@@ -10,3 +10,9 @@ See [here](https://github.com/eth-p/ls-git/issues/1) for a full list of compatib
 - git
 - tput
 - perl
+
+## Installation
+
+```bash
+bash install
+```
