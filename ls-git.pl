@@ -151,9 +151,9 @@ sub desarg {
     foreach $arg (@_) {
         my $key = (%$arg)[0];
         if (exists $args{$key}) {
-            push \@results, $args{$key};
+            push @results, $args{$key};
         } else {
-            push \@results, (%$arg)[1]
+            push @results, (%$arg)[1]
         }
     }
 
@@ -278,7 +278,7 @@ sub git_status {
     return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
-        push $results, {
+        push @$results, {
             'file'   => $line,
             'status' => 'up-to-date'
         };
@@ -289,7 +289,7 @@ sub git_status {
     return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
-        push $results, {
+        push @$results, {
             'file'   => $line,
             'status' => 'ignored'
         };
@@ -322,7 +322,7 @@ sub git_status {
             $status->{'to'}     = $files[1];
         }
 
-        push $results, $status;
+        push @$results, $status;
     }
 
     return $results;
@@ -528,7 +528,7 @@ sub files {
             next if ($entry =~ /^\.{1,2}$/ && $opt_hidden != 2);
         }
 
-        push \@entries, catfile($directory, $entry);
+        push @entries, catfile($directory, $entry);
     }
 
     # Stat the entries.
@@ -571,8 +571,8 @@ sub render_component_file {
     });
 
     if ($show_link_dest && $info->{'kind'}->{'kind'} eq 'symlink') {
-        push \@rendered, {'text' => ' -> '};
-        push \@rendered, {'text' => readlink($info->{'file'})};
+        push @rendered, {'text' => ' -> '};
+        push @rendered, {'text' => readlink($info->{'file'})};
     }
 
     @$render[$colnum] = \@rendered;
@@ -787,7 +787,7 @@ sub component_widths {
     my $component;
 
     foreach $component (@{$_[0]}) {
-        push $widths, component_width($component);
+        push @$widths, component_width($component);
     }
 
     return $widths;
@@ -999,7 +999,7 @@ sub print_listing {
         exit 1;
     };
 
-    Getopt::Long::Configure('bundling', 'bundling_override', 'gnu_compat');
+    Getopt::Long::Configure('gnu_getopt');
     Getopt::Long::GetOptions(\%args, @argspec);
 
     $SIG{__WARN__} = undef;
