@@ -29,7 +29,9 @@ use feature qw(say);
 use Cwd;
 use Cwd 'abs_path';
 use Cwd 'realpath';
-use Date::Format;
+use Env qw($LANG);
+use DateTime;
+use DateTime::Locale;
 use File::Basename;
 use File::Spec::Functions 'catfile', 'rel2abs';
 use Fcntl ':mode';
@@ -47,6 +49,7 @@ my %args        = ();
 my $color       = (-t STDOUT);
 my $term_width  = `tput cols`;
 my $status      = 0;
+my $year        = DateTime->now()->year();
 
 my @argspec     = (
     "1",      # Output: One file per line.
@@ -65,6 +68,16 @@ my @argspec     = (
     "s",      # Print block count.
     #"@",     # TODO: Extended attribute support.
 );
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Localization:
+# ----------------------------------------------------------------------------------------------------------------------
+
+my $locale_datetime         = DateTime::Locale->load($LANG || 'en-US');
+my $locale_datetime_patterns = {
+    'recent'  => 'MMM dd',
+    'distant' => 'MMM dd Y'
+};
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Messages:
@@ -638,10 +651,14 @@ sub render_component_date {
     my $info      = $_[2];
 
     my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
-    my $date_stamp = $info->{'time_' . $date_kind};
+    my $timestamp   = $info->{'time_' . $date_kind};
+
+    my $datetime         = DateTime->from_epoch(epoch => $timestamp);
+    my $datetime_pattern = $locale_datetime_patterns->{$datetime->year() == $year ? 'recent' : 'distant'};
 
     @$render[$colnum] = [{
-        'text' => time2str('%b %e %H:%M', $date_stamp)
+        'text'  => $datetime->format_cldr($datetime_pattern),
+        'align' => 'L'
     }];
 }
 
@@ -733,6 +750,8 @@ sub component_string {
     my $buffer  = '';
     my $padding = $_[1];
 
+    my $align = @{$_[0]}[0]->{'align'} || $_[2];
+
     foreach $segment (@{$_[0]}) {
         $padding -= length $segment->{'text'};
         $buffer  .= $segment->{'ansi_prefix'} if exists $segment->{'ansi_prefix'};
@@ -740,8 +759,8 @@ sub component_string {
         $buffer  .= $segment->{'ansi_suffix'} if exists $segment->{'ansi_suffix'};
     }
 
-    $buffer = (sprintf "%-${padding}s", '') . $buffer if ($padding > 0 && $_[2] eq 'L');
-    $buffer = $buffer . (sprintf "%-${padding}s", '') if ($padding > 0 && $_[2] eq 'R');
+    $buffer = (sprintf "%-${padding}s", '') . $buffer if ($padding > 0 && $align eq 'R');
+    $buffer = $buffer . (sprintf "%-${padding}s", '') if ($padding > 0 && $align eq 'L');
 
     return $buffer;
 }
@@ -846,7 +865,7 @@ sub print_entries {
             my $buffer = '';
             for (my $i = 0; $i < @columns; $i++) {
                 $buffer .= " " if ($i != 0 && !$render->{'render'}[$i][0]->{'margin'});
-                $buffer .= component_string($render->{'render'}[$i], $columns[$i], ($i == @columns - 1) ? '-' : 'L');
+                $buffer .= component_string($render->{'render'}[$i], $columns[$i], ($i == @columns - 1) ? '-' : 'R');
             }
 
             say $buffer;
@@ -870,7 +889,7 @@ sub print_entries {
                 my $min_width = $render->{'render'}[$i][0]->{'minwidth_short'} || 0;
 
                 $buffer .= " " if ($i != 0 && !$render->{'render'}[$i][0]->{'margin'});
-                $buffer .= component_string($render->{'render'}[$i], $min_width, ($i == $count - 1) ? '-' : 'L');
+                $buffer .= component_string($render->{'render'}[$i], $min_width, ($i == $count - 1) ? '-' : 'R');
                 $buffer_width += component_width(${render}->{'render'}[$i]) + $min_width;
             }
 
