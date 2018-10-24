@@ -245,7 +245,7 @@ sub git_status {
     my $line;
 
     # git ls-tree
-    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
+    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD`;
     return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
@@ -308,21 +308,21 @@ sub get_versioning_for_files {
 
     # Get file status.
     foreach $file (@$files) {
-        next if $file->{'kind'}->{'kind'} eq 'directory';
+        # next if $file->{'kind'}->{'kind'} eq 'directory';
 
         my $filedir = dirname($file->{'file'});
         if ($filedir ne $dir) {
             $dir = $filedir;
             my $git = git_status($filedir) or next;
-            my $status;
-            foreach $status (@$git) {
-                my $status_file = rel2abs($status->{'file'}, $filedir);
-                $githash{$status_file} = $status;
+            my $status_info;
+            foreach $status_info (@$git) {
+                my $status_file = rel2abs($status_info->{'file'}, $filedir);
+                $githash{$status_file} = $status_info;
 
                 # Bubble up to gitdir.
                 while (($status_file = dirname($status_file)) ne $gitdir) {
                     $githash{$status_file} = {
-                        'status' => $status->{'status'} eq 'ignored' ? 'ignored' : 'modified'
+                        'status' => $status_info->{'status'} eq 'ignored' ? 'ignored' : 'modified'
                     };
                 }
             }
