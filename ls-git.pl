@@ -211,7 +211,7 @@ sub status_color {
     return "\x1B[32m"   if ($info->{'git'}->{'status'} eq 'added');
     return "\x1B[31m"   if ($info->{'git'}->{'status'} eq 'removed');
     return "\x1B[34m"   if ($info->{'git'}->{'status'} eq 'renamed');
-    return "\x1B[1;39m" if ($info->{'git'}->{'status'} eq 'ignored');
+    return "\x1B[2;39m" if ($info->{'git'}->{'status'} eq 'ignored');
     return '';
 }
 
@@ -227,7 +227,7 @@ sub status_symbol {
     return '+' if ($info->{'git'}->{'status'} eq 'added');
     return '-' if ($info->{'git'}->{'status'} eq 'removed');
     return '~' if ($info->{'git'}->{'status'} eq 'renamed');
-    return "!" if ($info->{'git'}->{'status'} eq 'ignored');
+    return "i" if ($info->{'git'}->{'status'} eq 'ignored');
     return ' ';
 }
 
@@ -243,7 +243,7 @@ sub git_status {
     my $results = [];
     my $line;
 
-    # git ls-files
+    # git ls-tree
     my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
     if (!$lsfiles) {
         return 0;
@@ -253,6 +253,19 @@ sub git_status {
         push $results, {
             'file'   => $line,
             'status' => 'up-to-date'
+        };
+    }
+
+    # git ls-files (ignored)
+    $lsfiles = `git -C "$_[0]" ls-files --others -i --exclude-standard 2>/dev/null`;
+    if (!$lsfiles) {
+        return 0;
+    }
+
+    for $line (split(/\n/, $lsfiles)) {
+        push $results, {
+            'file'   => $line,
+            'status' => 'ignored'
         };
     }
 
@@ -313,7 +326,7 @@ sub get_versioning_for_files {
                 # Bubble up to gitdir.
                 while (($status_file = dirname($status_file)) ne $gitdir) {
                     $githash{$status_file} = {
-                        'status' => 'modified'
+                        'status' => $status->{'status'} eq 'ignored' ? 'ignored' : 'modified'
                     };
                 }
             }
@@ -652,7 +665,7 @@ sub render_component_git {
     # Some git information.
     my ($color)   = desarg $_[3], {'color' => 0};
     @$render[$colnum] = [{
-        'ansi_prefix' => $color ? "\x1B[1m" : '',
+        'ansi_prefix' => $color ? "\x1B[2m" : '',
         'text' => '[',
         'ansi_suffix' => $color ? "\x1B[0m" : ''
     },{
@@ -660,7 +673,7 @@ sub render_component_git {
         'ansi_prefix' => $color ? status_color($info) : '',
         'ansi_suffix' => $color ? "\x1B[0m" : ''
     },{
-        'ansi_prefix' => $color ? "\x1B[1m" : '',
+        'ansi_prefix' => $color ? "\x1B[2m" : '',
         'text' => ']',
         'ansi_suffix' => $color ? "\x1B[0m" : ''
     }];
