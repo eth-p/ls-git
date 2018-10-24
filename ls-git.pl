@@ -22,16 +22,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # ----------------------------------------------------------------------------------------------------------------------
+use feature qw(say);
 use strict;
 use warnings;
-use feature qw(say);
 
-use Cwd;
-use Cwd 'abs_path';
-use Cwd 'realpath';
+use Cwd 'abs_path', 'realpath';
 use Env qw($LANG);
-use DateTime;
-use DateTime::Locale;
 use File::Basename;
 use File::Spec::Functions 'catfile', 'rel2abs', 'abs2rel';
 use Fcntl ':mode';
@@ -39,6 +35,7 @@ use Getopt::Long;
 use List::Util qw(reduce max);
 use Math::Round;
 use Scalar::Util qw(reftype);
+use Time::Moment;
 
 use Data::Dumper; # Debug
 
@@ -58,7 +55,7 @@ my %args        = ();
 my $color       = (-t STDOUT);
 my $term_width  = `tput cols`;
 my $status      = 0;
-my $year        = DateTime->now()->year();
+my $year        = Time::Moment->now->year();
 
 my @argspec     = (
     "1",      # Output: One file per line.
@@ -82,16 +79,15 @@ my @argspec     = (
 # Localization:
 # ----------------------------------------------------------------------------------------------------------------------
 
-my $locale_datetime      = DateTime::Locale->load($LANG || 'en-US');
 my $locale_date_patterns = {
-    'recent'  => $locale_datetime->date_format_short =~ s/y{1,}//r  =~ s/M{1,}/MMM/r =~ s/[-\/]/ /gr =~ s/\s+$//gr =~ s/^\s+//gr,
-    'distant' => $locale_datetime->date_format_short =~ s/y{1,}/Y/r =~ s/M{1,}/MMM/r =~ s/[-\/]/ /gr =~ s/\s+$//gr =~ s/^\s+//gr,
+    'recent'  => '%b %d',
+    'distant' => '%b %d %Y',
     'align'   => 'L'
 };
 
 my $locale_time_patterns = {
-    'recent'  => 'kk:mm',
-    'distant' => 'kk:mm',
+    'recent'  => '%H:%M',
+    'distant' => '%H:%M',
     'align'   => 'L'
 };
 
@@ -197,7 +193,7 @@ sub desarg {
 sub format_size {
     my $size = $_[0];
     my $lim  = 1;
-    return $size                               . 'B' if $size < ($lim *= 1024);
+    return $size                             . 'B' if $size < ($lim *= 1024);
     return nearest(1, $size / ($lim / 1024)) . 'K' if $size < ($lim *= 1024);
     return nearest(1, $size / ($lim / 1024)) . 'M' if $size < ($lim *= 1024);
     return nearest(1, $size / ($lim / 1024)) . 'G' if $size < ($lim *= 1024);
@@ -711,12 +707,12 @@ sub render_component_time {
     my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
     my $timestamp   = $info->{'time_' . $date_kind};
 
-    my $datetime         = DateTime->from_epoch(epoch => $timestamp);
+    my $datetime         = Time::Moment->from_epoch($timestamp);
     my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
     my $pattern          = $locale_time_patterns->{$pattern_style};
 
     @$render[$colnum] = [{
-        'text'  => $datetime->format_cldr($pattern),
+        'text'  => $datetime->strftime($pattern),
         'align' => $locale_time_patterns->{'align'} || 'L'
     }];
 }
@@ -731,12 +727,12 @@ sub render_component_date {
     my ($date_kind) = desarg $_[3], {'componentopt_date_kind', => 'modified'};
     my $timestamp   = $info->{'time_' . $date_kind};
 
-    my $datetime         = DateTime->from_epoch(epoch => $timestamp);
+    my $datetime         = Time::Moment->from_epoch($timestamp);
     my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
     my $pattern          = $locale_date_patterns->{$pattern_style};
 
     @$render[$colnum] = [{
-        'text'  => $datetime->format_cldr($pattern),
+        'text'  => $datetime->strftime($pattern),
         'align' => $locale_date_patterns->{'align'} || 'L'
     }];
 }

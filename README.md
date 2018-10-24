@@ -24,7 +24,7 @@ Programs:
 - perl
 
 Perl Modules:
-- DateTime
+- Time::Moment
 - Math::Round
 
 ## Installation
