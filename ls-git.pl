@@ -265,7 +265,7 @@ sub git_status {
     my $line;
 
     # git ls-tree
-    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD`;
+    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
     return 0 if $? != 0;
 
     for $line (split(/\n/, $lsfiles)) {
