@@ -354,7 +354,7 @@ sub render_component_file {
     my $colnum = $_[1];
     my $info   = $_[2];
 
-    my ($show_link_dest) = desarg $_[3], {'componentopt_file_dest'  => 0},;
+    my ($show_link_dest) = desarg $_[3], {'componentopt_file_dest'  => 0};
 
     my @rendered = ({'text' => $info->{'path_basename'}});
     if ($show_link_dest && $info->{'kind'}->{'kind'} eq 'symlink') {
@@ -434,8 +434,10 @@ sub render_component_owner {
     my $colnum = $_[1];
     my $info   = $_[2];
 
+    my ($names_human) = desarg $_[3], {'componentopt_names_human'  => 1};
+
     @$render[$colnum] = [{
-        'text'     => get_user_name($info->{'user'}),
+        'text'     => $names_human ? get_user_name($info->{'user'}) : $info->{'user'},
     }];
 }
 
@@ -446,11 +448,13 @@ sub render_component_group {
     my $colnum = $_[1];
     my $info   = $_[2];
 
+    my ($names_human) = desarg $_[3], {'componentopt_names_human'  => 1};
+
     @$render[$colnum] = [{
         'text'   => ' ',
         'margin' => 1 # bool, not a value
     },{
-        'text' => get_group_name($info->{'group'}),
+        'text' => $names_human ? get_group_name($info->{'group'}) : $info->{'group'},
     }];
 }
 
@@ -712,7 +716,7 @@ my $printopts = {
     # Component Options
     'componentopt_file_dest'   => $args{'l'} || 0,
     'componentopt_size_human'  => $args{'h'} || 0,
-    'componentopt_perms_human' => $args{'n'} ? 0 : 1,
+    'componentopt_names_human' => $args{'n'} ? 0 : 1,
     'componentopt_date_kind',  => 'modified',
 };
 
