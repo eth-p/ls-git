@@ -55,7 +55,7 @@ my %args        = ();
 my $color       = (-t STDOUT);
 my $term_width  = `tput cols`;
 my $status      = 0;
-my $year        = Time::Moment->now->year();
+my $now         = Time::Moment->now();
 
 my @argspec     = (
     "1",      # Output: One file per line.
@@ -708,7 +708,7 @@ sub render_component_time {
     my $timestamp   = $info->{'time_' . $date_kind};
 
     my $datetime         = Time::Moment->from_epoch($timestamp);
-    my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
+    my $pattern_style    = $datetime->delta_months($now) >= 6 ? 'distant' : 'recent';
     my $pattern          = $locale_time_patterns->{$pattern_style};
 
     @$render[$colnum] = [{
@@ -728,7 +728,7 @@ sub render_component_date {
     my $timestamp   = $info->{'time_' . $date_kind};
 
     my $datetime         = Time::Moment->from_epoch($timestamp);
-    my $pattern_style    = $datetime->year() == $year ? 'recent' : 'distant';
+    my $pattern_style    = $datetime->delta_months($now) >= 6 ? 'distant' : 'recent';
     my $pattern          = $locale_date_patterns->{$pattern_style};
 
     @$render[$colnum] = [{
