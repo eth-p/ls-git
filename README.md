@@ -9,6 +9,19 @@ of files and directories in your repository in way that is both familiar and use
     <img src="https://media.githubusercontent.com/media/eth-p/ls-git/a56c69119cdd4051d73629aaef9e0bb5d07b78f5/docs/demo.svg">
 </p>
 
+### 
+
+| Symbol | For Files                         | For Directories                                              |
+| ------ | --------------------------------- | ------------------------------------------------------------ |
+| `[ ]`  | The file is up-to-date.           | Files in the directory are up-to-date.                       |
+| `[~]`  | The file was modified or renamed. | The directory has one or more modified, added, or renamed files. |
+| `[+]`  | The file was added.               | N/A                                                          |
+| `[i]`  | The file is ignored.              | All files in the directory are ignored.                      |
+| `[?]`  | The file is untracked.            | The directory has one or more untracked files.               |
+
+
+
+
 ## Warnings
 - **This software is pre-alpha.**  
   As much as I would like to, *I unfortunately cannot guarantee it will work for you*.  
