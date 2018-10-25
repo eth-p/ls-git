@@ -23,5 +23,5 @@
 #@ SOFTWARE.
 #@ ----------------------------------------------------------------------------------------------------------------------
 use FindBin;
-require "$FindBin::Bin/ls-git.pl";
+require "$FindBin::RealBin/ls-git.pl";
 

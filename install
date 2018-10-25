@@ -192,7 +192,7 @@ preprocess() {
 
 			'require'*) {
 				# Use directive.
-				file="${srcdir}/$(sed "s/^require *(\{0,1\}['\"]\\\$FindBin::Bin\/\([A-Za-z0-9\\/\.\\-]\{1,\}\).*\$/\1/" <<< "$line")"
+				file="${srcdir}/$(sed "s/^require *(\{0,1\}['\"]\\\$FindBin::RealBin\/\([A-Za-z0-9\\/\.\\-]\{1,\}\).*\$/\1/" <<< "$line")"
 				echo "- Embedding: $file" 1>&2
 				if [ -f "$file" ]; then
 
