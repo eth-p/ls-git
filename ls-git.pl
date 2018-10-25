@@ -375,8 +375,7 @@ sub get_versioning_for_files {
 
                 # Bubble up to gitdir.
                 while (($status_file = dirname($status_file)) ne $gitdir) {
-                    my $dir_status = $githash{$status_file} || 'unknown';
-
+                    my $dir_status = $githash{$status_file}->{'status'} || 'unknown';
                     if ($file_status eq 'ignored' && $dir_status =~ /unknown/) {
                         $githash{$status_file} = {
                             'status' => 'ignored'
@@ -403,6 +402,14 @@ sub get_versioning_for_files {
     foreach $file (@$files) {
         if (exists $githash{$file->{'path'}}) {
             $file->{'git'} = $githash{$file->{'path'}};
+        } else {
+            my $file_parent = path_expand(rel2abs($file->{'path'}));
+            while (($file_parent = dirname($file_parent)) ne '/') {
+                if (exists $githash{$file_parent}) {
+                    $file->{'git'} = $githash{$file_parent};
+                    last;
+                }
+            }
         }
     }
 }
