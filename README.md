@@ -53,7 +53,7 @@ Perl Modules:
 ```bash
 git clone 'https://github.com/eth-p/ls-git.git'
 cd ls-git
-./install
+./install --deps --to ~/.bin
 ```
 
 This will install all required Perl modules, and save `ls-git` to `~/.bin/ls-git`.

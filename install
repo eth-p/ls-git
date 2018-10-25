@@ -23,88 +23,230 @@
 # SOFTWARE.
 # ----------------------------------------------------------------------------------------------------------------------
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -z "$PREFIX" ]        && PREFIX="$HOME"
-[ "$PREFIX" = "$HOME" ] && INSTALL="$PREFIX/.bin" || INSTALL="$PREFIX/bin"
-[ -d "$INSTALL" ]       || mkdir -p "$INSTALL"
-INSTALL_FILE="$INSTALL/ls-git"
+# ----------------------------------------------------------------------------------------------------------------------
+A_ERR="\x1B[31m"
+A_MSG="\x1B[35m"
+A_RST="\x1B[0m"
+A_CLR="\x1B[A\x1B[J"
+A_ALT_ENTER="\x1B[?1049h"
+A_ALT_EXIT="\x1B[?1049l"
+# ----------------------------------------------------------------------------------------------------------------------
+# Arguments:
+
+arg_to="$HOME/.bin"
+arg_deps=false
+arg_minify=false
+arg_depcheck=true
+argv=()
+
+# Argument Parser:
+argparse_key=''
+argparse_val=''
+for argparse in "$@" ''; do
+	[ "$argparse_key" = '--' ] && { argv+=("$argparse"); continue; };
+	case "$argparse" in
+		'--')      argparse_key='--'; continue;;
+		'--'*'='*) argparse_key="$(sed 's/=.*$//' <<< "$argparse")"; argparse_val="$(sed 's/^.*=//' <<< "$argparse")";;
+		'--'*)     argparse_key="$argparse"; continue;;
+		*)         argparse_val="$argparse";;
+	esac
+
+	case "$argparse_key" in
+		'')              argv+=("$argparse_val");;
+		'--to')          arg_to="$argparse_val";;
+		'--deps')        arg_deps=true;;
+		'--minify')      arg_minify=true;;
+		'--no-depcheck') arg_depcheck=false;;
+		*)               printf "${A_ERR}Illegal argument: %s${A_RST}\n" "$argparse_key";;
+	esac
+
+	argparse_key=''
+done
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Dependency check:
+# Utility Functions:
 
-depcheck_perl() {
-	printf "Checking for module %-30s " "'$1'..."
-	if echo "use $1;" | perl &>/dev/null; then
-		echo "OK"
-		return 0
-	fi
+start() {
+	printf "${A_MSG}%s${A_RST}\n" "$1" 1>&2
+}
 
-	echo "Missing"
-	echo "Installing..."
-	cpan install "$1" && return 0;
+err() {
+	printf "%$(tput cols)s" '' | tr ' ' '-' 1>&2
+	printf "${A_ERR}ERROR: %s${A_RST}\n" "$1" 1>&2
+}
 
-	echo "------"
-	echo "FATAL: Failed to install module: $1";
+fatal() {
+	printf "%$(tput cols)s" '' | tr ' ' '-' 1>&2
+	printf "${A_ERR}FATAL: %s${A_RST}\n" "$1" 1>&2
 	exit 1
 }
 
+contains() {
+	local search="$1"
+	local element
+	for element in "${@:2}"; do
+		[ "$element" = "$search" ] && return 0
+	done
+	return 1
+}
+
+abspath() {
+	python -c "import os,sys; print os.path.abspath(sys.argv[1])" "$1" || realpath "$1" || {
+		fatal "Please install python to use this installer."
+		exit 2
+	}
+}
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Dependency Check Functions:
+
+__cache_depcheck_perl=()
+__cache_depcheck=()
+
+depcheck_perl() {
+	local module="$1"
+
+	contains "$module" "${__cache_depcheck_perl[@]}" && return 0
+	__cache_depcheck_perl+=("$module")
+
+	# Check if the module can be loaded in Perl.
+	printf "Checking for module %-30s " "'$module'..."
+	if echo "use $module;" | perl &>/dev/null; then
+		echo "OK"
+		return 0
+	else
+		echo "Missing"
+	fi
+
+	# Check if the module can't be installed by the script.
+	[ "$arg_deps" = "true" ] || fatal "Missing module."
+
+	# Attempt to install the module.
+	printf "${A_ALT_ENTER}"
+	start "Installing module: ${module}"
+	PERL_MM_USE_DEFAULT=1 cpan install "$module" && return 0;
+
+	if [ "$?" -ne 0 ]; then
+		err "Install failed."
+		read -s
+		printf "${A_ALT_EXIT}"
+		exit 1
+	fi
+
+	printf "${A_ALT_EXIT}"
+	printf "${A_CLR}"
+	printf "Checking for module %-30s Installed\n" "'$module'..."
+}
+
 depcheck() {
-	printf "Checking for dependency %-26s " "'$1'..."
+	local program="$1"
+
+	contains "$program" "${__cache_depcheck[@]}" && return 0
+	__cache_depcheck+=("$program")
+
+	# Check if the program exists in the path.
+	printf "Checking for dependency %-26s " "'$program'..."
 	if command -v "$1" &>/dev/null; then
 		echo "OK"
 		return 0
 	fi
 
+	# Fail.
 	echo "Missing"
+	fatal "Missing dependency."
 	exit 1
 }
 
+# ----------------------------------------------------------------------------------------------------------------------
+# Preproccessing:
+
+__cache__preprocess_included=()
+
+preprocess() {
+	local srcfile="$(abspath "$1")"
+	local srcdir="$(abspath "$2")"
+
+	# Don't include twice.
+	contains "$srcfile" "${__cache__preprocess_included[@]}" && return 0
+	__cache__preprocess_included+=("$srcfile")
+
+	# Preprocess.
+	while IFS='' read -r line; do
+		case "$line" in
+			'#!'*) {
+				# Shebang comment.
+				echo "$line"
+			};;
+
+			'#@'*) {
+				# Copyright comment.
+				echo "#${line:2}"
+			};;
+
+			'#'*) {
+				# Regular comment.
+				:
+			};;
+
+			'use FindBin;');;
+
+			'require'*) {
+				# Use directive.
+				file="${srcdir}/$(sed "s/^require *(\{0,1\}['\"]\\\$FindBin::Bin\/\([A-Za-z0-9\\/\.\\-]\{1,\}\).*\$/\1/" <<< "$line")"
+				echo "- Embedding: $file" 1>&2
+				if [ -f "$file" ]; then
+
+					echo "# <PREPROCESSOR> INCLUDE: $file"
+					preprocess "$file" "$srcdir"
+					echo "# <PREPROCESSOR> END:     $file"
+					continue
+				else
+					fatal "Failed to embed file: $file"
+				fi
+			};;
+
+			*) {
+				# Regular line.
+				echo "$line"
+			};;
+		esac
+	done < "$srcfile"
+}
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Install:
+
+INSTALL="$arg_to"
+SOURCE="${HERE}/src/main.pl"
+
+[ -z "$arg_to" ] && fatal "Invalid usage of '--to' argument."
+
+# Preprocessing.
+start "Preprocessing..."
+tempfile="$(mktemp "$(mktemp -d)"/'ls-git.XXXXXX')"
+preprocess "$SOURCE" "$(dirname "$SOURCE")" > "$tempfile"
+
 # Command dependencies.
+start "Checking dependencies..."
 depcheck 'cpan'
-depcheck 'perl'
 depcheck 'git'
+depcheck 'perl'
 depcheck 'tput'
 
 # Module dependencies.
 while read -r module; do
 	depcheck_perl "$module"
-done < <(grep "^use [A-Z][A-Za-z\:]\{1,\}" "$HERE/ls-git.pl" | sed 's/use \([A-Za-z\:]\{1,\}\).*/\1/' | sort -r )
+done < <(grep "^use [A-Z][A-Za-z\:]\{1,\}" "$tempfile" | sed 's/use \([A-Za-z\:]\{1,\}\).*/\1/' | sort -r )
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Preproccess:
-
-echo "Preprocessing..."
-tempfile="$(mktemp "$(mktemp -d)"/'ls-git.XXXXXX')"
-
-while IFS='' read -r line; do
-	if [ "${line:0:7}" = "require" ]; then
-		file="$(sed "s/^require *(\{0,1\}['\"]\([A-Za-z0-9\/\.\-\]\{1,\}\).*\$/\1/" <<< "$line")"
-		if [ -f "$file" ]; then
-			echo "Embedding: $file"
-
-			echo "# <PREPROCESSOR> INCLUDE: $file" >> "$tempfile"
-			cat "$file" >> "$tempfile"
-			echo "# <PREPROCESSOR> END:     $file" >> "$tempfile"
-			continue
-		else
-			echo "------"
-			echo "FATAL: Failed to embed file: $file";
-			exit 1
-		fi
-	fi
-
-	echo "$line" >> "$tempfile"
-done < "$HERE/ls-git.pl"
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Install:
-
+# Install.
+start "Installing..."
 echo "Installing to: $INSTALL"
-if [ -n "$MINIFY" ] && command -v perltidy &>/dev/null; then
+if [ "$arg_minify" = "true" ] && command -v perltidy &>/dev/null; then
 	# Install minified.
-	perltidy --mangle --delete-all-comments "$tempfile" -o "$INSTALL_FILE"
+	perltidy --mangle --delete-all-comments "$tempfile" -o "$INSTALL"
 else
-	# Install original.
-	cp "$tempfile" "$INSTALL_FILE"
+	# Install normal.
+	cp "$tempfile" "$INSTALL"
 fi
 
-chmod 755 "$INSTALL_FILE"
+chmod 755 "$INSTALL"

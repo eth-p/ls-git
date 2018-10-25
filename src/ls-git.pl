@@ -337,7 +337,7 @@ sub git_status {
             $status->{'status'} = 'removed'  if substr($fields[1], 0, 1) eq 'D';
             $status->{'file'}   = $fields[8];
         } elsif ($fields[0] eq '2') {
-            my @files = split(/\t/, $fields[9]);
+            my @files = split(/\t/, $fields[8]);
             $status->{'status'} = 'renamed';
             $status->{'file'}   = $files[0];
             $status->{'to'}     = $files[1];
