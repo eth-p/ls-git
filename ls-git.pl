@@ -362,7 +362,10 @@ sub get_versioning_for_files {
         my $filedir = dirname($file->{'file'});
         if ($filedir ne $dir) {
             $dir = $filedir;
-            my $gitdir = trim(`git -C "$filedir" rev-parse --show-toplevel` || '');
+
+            my $gitdir = trim(`git -C "$filedir" rev-parse --show-toplevel 2>/dev/null` || '');
+            next unless $? == 0;
+
             my $git = git_status($filedir) or next;
             my $status_info;
             foreach $status_info (@$git) {
