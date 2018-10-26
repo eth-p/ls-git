@@ -27,8 +27,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 A_ERR="\x1B[31m"
 A_MSG="\x1B[35m"
 A_RST="\x1B[0m"
-A_CLR="\x1B[A\x1B[J"
-A_ALT_ENTER="\x1B[?1049h"
+A_AMEND="\x1B[A\x1B[J"
+A_ALT_ENTER="\x1B[?1049h\x1B[2J\x1B[H"
 A_ALT_EXIT="\x1B[?1049l"
 # ----------------------------------------------------------------------------------------------------------------------
 # Arguments:
@@ -124,7 +124,7 @@ depcheck_perl() {
 	# Attempt to install the module.
 	printf "${A_ALT_ENTER}"
 	start "Installing module: ${module}"
-	PERL_MM_USE_DEFAULT=1 cpan install "$module" && return 0;
+	PERL_MM_USE_DEFAULT=1 cpan install "$module";
 
 	if [ "$?" -ne 0 ]; then
 		err "Install failed."
@@ -134,7 +134,7 @@ depcheck_perl() {
 	fi
 
 	printf "${A_ALT_EXIT}"
-	printf "${A_CLR}"
+	printf "${A_AMEND}"
 	printf "Checking for module %-30s Installed\n" "'$module'..."
 }
 
