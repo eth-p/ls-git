@@ -57,3 +57,9 @@ cd ls-git
 ```
 
 This will install all required Perl modules, and save `ls-git` to `~/.bin/ls-git`.
+
+## Updates
+
+```bash
+./install --update
+```

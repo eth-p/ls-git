@@ -23,6 +23,7 @@
 # SOFTWARE.
 # ----------------------------------------------------------------------------------------------------------------------
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_CACHE="${HERE}/.installed"
 # ----------------------------------------------------------------------------------------------------------------------
 A_ERR="\x1B[31m"
 A_MSG="\x1B[35m"
@@ -33,11 +34,13 @@ A_ALT_EXIT="\x1B[?1049l"
 # ----------------------------------------------------------------------------------------------------------------------
 # Arguments:
 
-arg_to="$HOME/.bin"
+arg_to="$([ -f "$INSTALL_CACHE" ] && cat "$INSTALL_CACHE" || echo "$HOME/.bin")"
+arg_update=false
 arg_deps=false
 arg_minify=false
 arg_depcheck=true
 argv=()
+argv_original=("$@")
 
 # Argument Parser:
 argparse_key=''
@@ -55,6 +58,7 @@ for argparse in "$@" ''; do
 		'')              argv+=("$argparse_val");;
 		'--to')          arg_to="$argparse_val";;
 		'--deps')        arg_deps=true;;
+		'--update')      arg_update=true;;
 		'--minify')      arg_minify=true;;
 		'--no-depcheck') arg_depcheck=false;;
 		*)               printf "${A_ERR}Illegal argument: %s${A_RST}\n" "$argparse_key";;
@@ -214,10 +218,24 @@ preprocess() {
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
+# Update:
+
+if [ "$arg_update" = "true" ]; then
+	start "Updating..."
+	git -C "$HERE" remote update >/dev/null
+	if [ "$(git -C "$HERE" rev-parse @)" = "$(git -C "$HERE" merge-base @ "@{u}")" ]; then
+		start "Update found."
+		exec bash "${BASH_SOURCE[0]}" "${argv_original[@]}"
+		return $?
+	fi
+fi
+
+# ----------------------------------------------------------------------------------------------------------------------
 # Install:
 
 INSTALL="$arg_to"
 SOURCE="${HERE}/src/main.pl"
+echo "$INSTALL" > "$INSTALL_CACHE"
 
 [ -z "$arg_to" ] && fatal "Invalid usage of '--to' argument."
 
