@@ -223,7 +223,7 @@ preprocess() {
 if [ "$arg_update" = "true" ]; then
 	start "Updating..."
 	git -C "$HERE" remote update >/dev/null
-	if [ "$(git -C "$HERE" rev-parse @)" = "$(git -C "$HERE" merge-base @ "@{u}")" ]; then
+	if [ "$(git -C "$HERE" rev-parse @)" != "$(git -C "$HERE" rev-parse '@{u}')" ] && [ "$(git -C "$HERE" rev-parse @)" = "$(git -C "$HERE" merge-base @ '@{u}')" ]; then
 		start "Update found."
 		exec bash "${BASH_SOURCE[0]}" "${argv_original[@]}"
 		return $?
