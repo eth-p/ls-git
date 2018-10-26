@@ -28,9 +28,10 @@ use warnings;
 
 use Cwd 'abs_path', 'realpath';
 use Env qw($LANG);
+use Fcntl ':mode';
 use File::Basename;
 use File::Spec::Functions 'catfile', 'rel2abs', 'abs2rel';
-use Fcntl ':mode';
+use Forks::Super 'bg_qx';
 use Getopt::Long;
 use List::Util qw(reduce max);
 use Math::Round;
@@ -294,11 +295,28 @@ sub git_status {
     my $results = [];
     my $line;
 
-    # git ls-tree
-    my $lsfiles = `git -C "$_[0]" ls-tree --name-only HEAD 2>/dev/null`;
-    return 0 if $? != 0;
+    # Run git commands in parallel.
+    my $lstree        = bg_qx "git -C '$_[0]' ls-tree --name-only HEAD 2>/dev/null";
+    my $lstree_job    = $Forks::Super::LAST_JOB;
 
-    for $line (split(/\n/, $lsfiles)) {
+    my $lsfiles       = bg_qx "git -C '$_[0]' ls-files --others -i --exclude-standard 2>/dev/null";
+    my $lsfiles_job   = $Forks::Super::LAST_JOB;
+
+    my $porcelain     = bg_qx "git -C '$_[0]' status --porcelain=2 2>/dev/null";
+    my $porcelain_job = $Forks::Super::LAST_JOB;
+
+    # Wait for commands.
+    $lstree_job->waitpid(0);
+    return 0 if $lstree_job->status != 0;
+
+    $lsfiles_job->waitpid(0);
+    return 0 if $lsfiles_job->status != 0;
+
+    $porcelain_job->waitpid(0);
+    return 0 if $porcelain_job->status != 0;
+
+    # git ls-tree
+    for $line (split(/\n/, $lstree)) {
         push @$results, {
             'file'   => $line,
             'status' => 'up-to-date'
@@ -306,9 +324,6 @@ sub git_status {
     }
 
     # git ls-files (ignored)
-    $lsfiles = `git -C "$_[0]" ls-files --others -i --exclude-standard 2>/dev/null`;
-    return 0 if $? != 0;
-
     for $line (split(/\n/, $lsfiles)) {
         push @$results, {
             'file'   => $line,
@@ -317,9 +332,6 @@ sub git_status {
     }
 
     # git status
-    my $porcelain = `git -C "$_[0]" status --porcelain=2 2>/dev/null`;
-    return 0 if $? != 0;
-
     # Parse status.
     for $line (split(/\n/, $porcelain)) {
         my @fields = split(/ /, $line, 9);
