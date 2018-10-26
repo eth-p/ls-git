@@ -50,21 +50,21 @@ for argparse in "$@" ''; do
 	case "$argparse" in
 		'--')      argparse_key='--'; continue;;
 		'--'*'='*) argparse_key="$(sed 's/=.*$//' <<< "$argparse")"; argparse_val="$(sed 's/^.*=//' <<< "$argparse")";;
-		'--'*)     argparse_key="$argparse"; continue;;
+		'--'*)     argparse_key="$argparse";;
 		*)         argparse_val="$argparse";;
 	esac
 
 	case "$argparse_key" in
 		'')              argv+=("$argparse_val");;
-		'--to')          arg_to="$argparse_val";;
-		'--deps')        arg_deps=true;;
-		'--update')      arg_update=true;;
-		'--minify')      arg_minify=true;;
-		'--no-depcheck') arg_depcheck=false;;
+		'--to')          [ "$argparse" != "$argparse_key" ] && arg_to="$argparse_val";;
+		'--deps')        arg_deps=true;      argparse_key='';;
+		'--update')      arg_update=true;    argparse_key='';;
+		'--minify')      arg_minify=true;    argparse_key='';;
+		'--no-depcheck') arg_depcheck=false; argparse_key='';;
 		*)               printf "${A_ERR}Illegal argument: %s${A_RST}\n" "$argparse_key";;
 	esac
 
-	argparse_key=''
+	[ "$argparse" != "$argparse_key" ] && argparse_key=''
 done
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -232,7 +232,6 @@ fi
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Install:
-
 INSTALL="$arg_to"
 SOURCE="${HERE}/src/main.pl"
 echo "$INSTALL" > "$INSTALL_CACHE"
