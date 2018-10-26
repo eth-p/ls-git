@@ -246,6 +246,7 @@ sub file_color {
     return "\x1B[34m" if ($info->{'kind'}->{'kind'} eq 'directory');
     return "\x1B[35m" if ($info->{'kind'}->{'kind'} eq 'symlink');
     return "\x1B[33m" if ($info->{'kind'}->{'kind'} eq 'pipe');
+    return "\x1B[32m" if ($info->{'kind'}->{'kind'} eq 'socket');
     return "\x1B[31m" if ($info->{'executable'});
     # TODO: More colors.
     return '';

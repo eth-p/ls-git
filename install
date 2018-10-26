@@ -128,7 +128,8 @@ depcheck_perl() {
 	# Attempt to install the module.
 	printf "${A_ALT_ENTER}"
 	start "Installing module: ${module}"
-	PERL_MM_USE_DEFAULT=1 cpan install "$module";
+	[ -d "${HERE}/.install-logs" ] || mkdir -p "${HERE}/.install-logs"
+	PERL_MM_USE_DEFAULT=1 cpan install -T "$module" | tee "${HERE}/.install-logs/${module}";
 
 	if [ "$?" -ne 0 ]; then
 		err "Install failed."
