@@ -31,7 +31,7 @@ use Env qw($LANG);
 use Fcntl ':mode';
 use File::Basename;
 use File::Spec::Functions 'catfile', 'rel2abs', 'abs2rel';
-use Forks::Super 'bg_qx';
+use Forks::Super 'bg_qx', IPC_DIR => '/tmp', FH_DIR => '/tmp';
 use Getopt::Long;
 use List::Util qw(reduce max);
 use Math::Round;
