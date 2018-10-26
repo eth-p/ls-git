@@ -454,7 +454,7 @@ sub file_mode_to_kind {
     return {'code' => 'l', 'kind' => 'symlink'}          if (S_ISLNK($_[0]));
     return {'code' => 'b', 'kind' => 'block device'}     if (S_ISBLK($_[0]));
     return {'code' => 'c', 'kind' => 'character devuce'} if (S_ISCHR($_[0]));
-    return {'code' => 'p', 'kind' => 'pipe'}             if (S_ISIFO($_[0]));
+    return {'code' => 'p', 'kind' => 'pipe'}             if (S_ISFIFO($_[0]));
     return {'code' => 's', 'kind' => 'socket'}           if (S_ISSOCK($_[0]));
     return {'code' => ' ', 'kind' => 'whiteout'}         if (S_ISWHT($_[0]));  #TODO => Find code for whiteout.
     return {'code' => ' ', 'kind' => 'door'}             if (S_ISDOOR($_[0])); #TODO => Find code for door.
