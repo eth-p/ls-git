@@ -35,6 +35,7 @@ use Getopt::Long;
 use List::Util qw(reduce max);
 use Math::Round;
 use Scalar::Util qw(reftype);
+use Term::Size::Any;
 use Time::Moment;
 
 use Data::Dumper; # Debug
@@ -50,10 +51,9 @@ BEGIN {
 # ----------------------------------------------------------------------------------------------------------------------
 # Globals:
 # ----------------------------------------------------------------------------------------------------------------------
-
 my %args        = ();
 my $color       = (-t STDOUT);
-my $term_width  = `tput cols`;
+my $term_width  = (Term::Size::Any::chars *STDOUT)[0];
 my $status      = 0;
 my $now         = Time::Moment->now();
 
